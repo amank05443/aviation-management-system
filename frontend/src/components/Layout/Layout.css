@@ -1,0 +1,23 @@
+.layout {
+  min-height: 100vh;
+  display: flex;
+}
+
+.layout-main {
+  flex: 1;
+  margin-left: 260px;
+  display: flex;
+  flex-direction: column;
+  transition: margin-left 0.3s ease;
+}
+
+.layout-content {
+  flex: 1;
+  background-color: var(--gray-50);
+}
+
+@media (max-width: 768px) {
+  .layout-main {
+    margin-left: 0;
+  }
+}

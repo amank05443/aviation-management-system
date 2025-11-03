@@ -221,6 +221,53 @@ npm start
 
 The frontend will be available at `http://localhost:3000`
 
+## Running on Single Port (Production-like)
+
+To run both frontend and backend on a single port (8000):
+
+### Option 1: Using the Quick Script (Easiest)
+```bash
+./run_single_port.sh
+```
+
+### Option 2: Manual Steps
+```bash
+# 1. Build React for production
+cd frontend
+npm run build
+
+# 2. Collect Django static files
+cd ../backend
+python manage.py collectstatic --noinput
+
+# 3. Run Django server
+python manage.py runserver
+```
+
+Everything will now be available at: **http://localhost:8000**
+
+The Django server will serve both the API endpoints and the React app!
+
+## Deployment
+
+For comprehensive deployment instructions including:
+- Production configuration
+- Railway deployment (easiest)
+- AWS EC2 deployment
+- DigitalOcean deployment
+- Security checklist
+- Performance optimization
+
+See the **[DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md)** file.
+
+### Quick Deploy to Railway (Recommended)
+```bash
+npm install -g @railway/cli
+railway login
+railway init
+railway up
+```
+
 ## Usage
 
 1. **Login**: Use the PNO and password you created (e.g., PNO: 12345, Password: password123)

@@ -41,12 +41,14 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!selectedAircraft) {
-      navigate('/aircraft-selection');
-      return;
-    }
+  // If an aircraft is selected, fetch its dashboard data
+  if (selectedAircraft) {
     fetchDashboardData();
-  }, [selectedAircraft, navigate]);
+  } else {
+    // No aircraft selected — skip fetch and allow dashboard to load
+    setLoading(false);
+  }
+}, [selectedAircraft]);
 
   const fetchDashboardData = async () => {
     try {

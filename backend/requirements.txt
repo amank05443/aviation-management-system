@@ -5,7 +5,7 @@ djangorestframework-simplejwt==5.3.0
 django-cors-headers==4.3.0
 
 # Database (for production)
-psycopg2-binary==2.9.9
+
 dj-database-url==2.1.0
 
 # Production server

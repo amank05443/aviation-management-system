@@ -20,7 +20,7 @@ const Login = () => {
 
   useEffect(() => {
     if (token) {
-      navigate('/aircraft-selection');
+          navigate('/dashboard');
     }
   }, [token, navigate]);
 
@@ -55,7 +55,7 @@ const Login = () => {
       setLoading(false);
 
       if (result.success) {
-        navigate('/aircraft-selection');
+            navigate('/dashboard');
       } else {
         setError(result.error);
       }
@@ -71,7 +71,7 @@ const Login = () => {
       setLoading(false);
 
       if (result.success) {
-        navigate('/aircraft-selection');
+            navigate('/dashboard');
       } else {
         setError(result.error);
       }

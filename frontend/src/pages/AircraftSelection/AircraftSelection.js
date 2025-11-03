@@ -146,14 +146,17 @@ const AircraftSelection = () => {
           </div>
         )}
 
-        {selectedAircraft && (
-          <button
-            className="proceed-button"
-            onClick={handleProceed}
-          >
-            Proceed to Dashboard
-          </button>
-        )}
+        <button
+  className={`proceed-button ${!selectedAircraft ? 'skip-selection' : ''}`}
+  onClick={() => {
+    if (selectedAircraft) {
+      selectAircraft(selectedAircraft);
+    }
+    navigate('/dashboard');
+  }}
+>
+  {selectedAircraft ? 'Proceed to Dashboard' : 'Skip & Go to Dashboard'}
+</button>
       </div>
     </div>
   );

@@ -2,14 +2,18 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { FaPlane, FaCheckCircle, FaUserShield, FaClock, FaGasPump } from 'react-icons/fa';
+import {
+  FaPlane, FaCheckCircle, FaUserShield, FaClock, FaGasPump, FaUser,
+  FaLock, FaChevronRight, FaTools, FaClipboardCheck, FaExclamationTriangle,
+  FaInfoCircle, FaTachometerAlt, FaCog
+} from 'react-icons/fa';
 import './FlyingOperations.css';
 
 const FlyingOperations = () => {
   const { selectedAircraft, user } = useAuth();
   const navigate = useNavigate();
 
-  const [activeSection, setActiveSection] = useState('prepare');
+  const [currentStage, setCurrentStage] = useState(0); // 0: BFS, 1: Pilot Acceptance, 2: Post Flying
   const [bfsRecord, setBfsRecord] = useState(null);
   const [pilotAcceptance, setPilotAcceptance] = useState(null);
   const [postFlying, setPostFlying] = useState(null);
@@ -59,7 +63,7 @@ const FlyingOperations = () => {
   const [postFlyingRemarks, setPostFlyingRemarks] = useState('');
 
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState({ type: '', text: '' });
+  const [alert, setAlert] = useState({ type: '', message: '' });
 
   useEffect(() => {
     if (!selectedAircraft) {
@@ -69,6 +73,13 @@ const FlyingOperations = () => {
     fetchLatestBFS();
   }, [selectedAircraft, navigate]);
 
+  useEffect(() => {
+    if (alert.message) {
+      const timer = setTimeout(() => setAlert({ type: '', message: '' }), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [alert]);
+
   const fetchLatestBFS = async () => {
     try {
       const response = await axios.get(`/api/before-flying-service/?aircraft_id=${selectedAircraft.id}`);
@@ -76,8 +87,8 @@ const FlyingOperations = () => {
         const latest = response.data[0];
         setBfsRecord(latest);
 
-        // Check if pilot acceptance exists
         if (latest.status === 'FSI_APPROVED') {
+          setCurrentStage(1);
           fetchPilotAcceptance(latest.id);
         }
       }
@@ -93,8 +104,8 @@ const FlyingOperations = () => {
       if (acceptance) {
         setPilotAcceptance(acceptance);
 
-        // Check if post flying exists
         if (acceptance.status === 'ACCEPTED') {
+          setCurrentStage(2);
           fetchPostFlying(acceptance.id);
         }
       }
@@ -115,8 +126,17 @@ const FlyingOperations = () => {
     }
   };
 
+  const showAlert = (type, message) => {
+    setAlert({ type, message });
+  };
+
   // BFS Handlers
   const handleCreateBFS = async () => {
+    if (!fuelLevel || !tirePressureMain || !tirePressureNose) {
+      showAlert('error', 'Please fill in all aircraft parameters');
+      return;
+    }
+
     try {
       setLoading(true);
       const response = await axios.post('/api/before-flying-service/', {
@@ -129,17 +149,17 @@ const FlyingOperations = () => {
       });
 
       setBfsRecord(response.data);
-      setMessage({ type: 'success', text: 'BFS record created successfully!' });
+      showAlert('success', 'BFS record created successfully! Now collect tradesman signatures.');
       setLoading(false);
     } catch (error) {
-      setMessage({ type: 'error', text: error.response?.data?.error || 'Failed to create BFS record' });
+      showAlert('error', error.response?.data?.error || 'Failed to create BFS record');
       setLoading(false);
     }
   };
 
   const handleTradesmanSign = async (trade) => {
     if (!tradePins[trade]) {
-      setMessage({ type: 'error', text: 'Please enter PIN' });
+      showAlert('error', 'Please enter PIN');
       return;
     }
 
@@ -151,18 +171,18 @@ const FlyingOperations = () => {
       });
 
       setBfsRecord(response.data);
-      setMessage({ type: 'success', text: `${trade.toUpperCase()} signature added successfully!` });
+      showAlert('success', `${trade.toUpperCase()} signature recorded successfully!`);
       setTradePins({ ...tradePins, [trade]: '' });
       setLoading(false);
     } catch (error) {
-      setMessage({ type: 'error', text: error.response?.data?.error || 'Failed to sign' });
+      showAlert('error', error.response?.data?.error || 'Failed to sign');
       setLoading(false);
     }
   };
 
   const handleSupervisorSign = async () => {
     if (!supervisorPin) {
-      setMessage({ type: 'error', text: 'Please enter supervisor PIN' });
+      showAlert('error', 'Please enter supervisor PIN');
       return;
     }
 
@@ -173,18 +193,18 @@ const FlyingOperations = () => {
       });
 
       setBfsRecord(response.data);
-      setMessage({ type: 'success', text: 'Supervisor signature added successfully!' });
+      showAlert('success', 'Supervisor signature recorded successfully!');
       setSupervisorPin('');
       setLoading(false);
     } catch (error) {
-      setMessage({ type: 'error', text: error.response?.data?.error || 'Failed to sign' });
+      showAlert('error', error.response?.data?.error || 'Failed to sign');
       setLoading(false);
     }
   };
 
   const handleFSISign = async () => {
     if (!fsiPin) {
-      setMessage({ type: 'error', text: 'Please enter FSI PIN' });
+      showAlert('error', 'Please enter FSI PIN');
       return;
     }
 
@@ -195,18 +215,23 @@ const FlyingOperations = () => {
       });
 
       setBfsRecord(response.data);
-      setMessage({ type: 'success', text: 'FSI approved! Pilot acceptance section is now unlocked.' });
+      showAlert('success', 'FSI approved! Pilot Acceptance stage is now unlocked.');
       setFsiPin('');
-      setActiveSection('pilot-acceptance');
+      setCurrentStage(1);
       setLoading(false);
     } catch (error) {
-      setMessage({ type: 'error', text: error.response?.data?.error || 'Failed to sign' });
+      showAlert('error', error.response?.data?.error || 'Failed to sign');
       setLoading(false);
     }
   };
 
   // Pilot Acceptance Handlers
   const handleCreatePilotAcceptance = async () => {
+    if (!currentReadings.current_fuel_level || !currentReadings.current_tire_pressure_main || !currentReadings.current_tire_pressure_nose) {
+      showAlert('error', 'Please provide all current readings');
+      return;
+    }
+
     try {
       setLoading(true);
       const response = await axios.post('/api/pilot-acceptance/', {
@@ -218,17 +243,23 @@ const FlyingOperations = () => {
       });
 
       setPilotAcceptance(response.data);
-      setMessage({ type: 'success', text: 'Pilot acceptance created successfully!' });
+      showAlert('success', 'Pilot acceptance created! Now sign to accept the aircraft.');
       setLoading(false);
     } catch (error) {
-      setMessage({ type: 'error', text: error.response?.data?.error || 'Failed to create pilot acceptance' });
+      showAlert('error', error.response?.data?.error || 'Failed to create pilot acceptance');
       setLoading(false);
     }
   };
 
   const handlePilotSign = async () => {
     if (!pilotPin) {
-      setMessage({ type: 'error', text: 'Please enter pilot PIN' });
+      showAlert('error', 'Please enter pilot PIN');
+      return;
+    }
+
+    const allChecked = Object.values(pilotChecks).every(check => check === true);
+    if (!allChecked) {
+      showAlert('warning', 'Not all checks are completed. Please verify before signing.');
       return;
     }
 
@@ -239,18 +270,23 @@ const FlyingOperations = () => {
       });
 
       setPilotAcceptance(response.data);
-      setMessage({ type: 'success', text: 'Pilot acceptance approved! Post flying section is now unlocked.' });
+      showAlert('success', 'Aircraft accepted! Post Flying stage is now unlocked.');
       setPilotPin('');
-      setActiveSection('post-flying');
+      setCurrentStage(2);
       setLoading(false);
     } catch (error) {
-      setMessage({ type: 'error', text: error.response?.data?.error || 'Failed to sign' });
+      showAlert('error', error.response?.data?.error || 'Failed to sign');
       setLoading(false);
     }
   };
 
   // Post Flying Handlers
   const handleCreatePostFlying = async () => {
+    if (!flightHours || !fuelConsumed || !fuelLevelAfter) {
+      showAlert('error', 'Please fill in all flight details');
+      return;
+    }
+
     try {
       setLoading(true);
       const response = await axios.post('/api/post-flying/', {
@@ -268,17 +304,17 @@ const FlyingOperations = () => {
       });
 
       setPostFlying(response.data);
-      setMessage({ type: 'success', text: 'Post flying record created successfully!' });
+      showAlert('success', 'Post flying record created! Now collect required signatures.');
       setLoading(false);
     } catch (error) {
-      setMessage({ type: 'error', text: error.response?.data?.error || 'Failed to create post flying record' });
+      showAlert('error', error.response?.data?.error || 'Failed to create post flying record');
       setLoading(false);
     }
   };
 
   const handlePostFlyingPilotSign = async () => {
     if (!postFlyingPilotPin) {
-      setMessage({ type: 'error', text: 'Please enter pilot PIN' });
+      showAlert('error', 'Please enter pilot PIN');
       return;
     }
 
@@ -289,18 +325,18 @@ const FlyingOperations = () => {
       });
 
       setPostFlying(response.data);
-      setMessage({ type: 'success', text: 'Pilot signed successfully!' });
+      showAlert('success', 'Pilot signed successfully!');
       setPostFlyingPilotPin('');
       setLoading(false);
     } catch (error) {
-      setMessage({ type: 'error', text: error.response?.data?.error || 'Failed to sign' });
+      showAlert('error', error.response?.data?.error || 'Failed to sign');
       setLoading(false);
     }
   };
 
   const handleEngineerSign = async () => {
     if (!engineerPin) {
-      setMessage({ type: 'error', text: 'Please enter engineer PIN' });
+      showAlert('error', 'Please enter engineer PIN');
       return;
     }
 
@@ -311,524 +347,905 @@ const FlyingOperations = () => {
       });
 
       setPostFlying(response.data);
-      setMessage({ type: 'success', text: 'Post flying completed! Aircraft data updated.' });
+      showAlert('success', 'Flight operation completed! Aircraft data has been updated.');
       setEngineerPin('');
       setLoading(false);
     } catch (error) {
-      setMessage({ type: 'error', text: error.response?.data?.error || 'Failed to sign' });
+      showAlert('error', error.response?.data?.error || 'Failed to sign');
       setLoading(false);
     }
   };
 
-  const canAccessPilotAcceptance = bfsRecord && bfsRecord.status === 'FSI_APPROVED';
-  const canAccessPostFlying = pilotAcceptance && pilotAcceptance.status === 'ACCEPTED';
+  // Helper Functions
+  const getTradesmanProgress = () => {
+    if (!bfsRecord) return 0;
+    const trades = ['ae', 'al', 'ao', 'ar', 'se'];
+    const signed = trades.filter(trade => bfsRecord[`${trade}_signed_at`]).length;
+    return Math.round((signed / trades.length) * 100);
+  };
+
+  const getChecklistProgress = () => {
+    const total = Object.keys(pilotChecks).length;
+    const checked = Object.values(pilotChecks).filter(Boolean).length;
+    return Math.round((checked / total) * 100);
+  };
+
+  const canAccessStage = (stage) => {
+    if (stage === 0) return true;
+    if (stage === 1) return bfsRecord && bfsRecord.status === 'FSI_APPROVED';
+    if (stage === 2) return pilotAcceptance && pilotAcceptance.status === 'ACCEPTED';
+    return false;
+  };
+
+  const getStageStatus = (stage) => {
+    if (stage === 0) {
+      if (!bfsRecord) return 'Not Started';
+      if (bfsRecord.status === 'FSI_APPROVED') return 'Completed';
+      return 'In Progress';
+    }
+    if (stage === 1) {
+      if (!pilotAcceptance) return canAccessStage(1) ? 'Ready' : 'Locked';
+      if (pilotAcceptance.status === 'ACCEPTED') return 'Completed';
+      return 'In Progress';
+    }
+    if (stage === 2) {
+      if (!postFlying) return canAccessStage(2) ? 'Ready' : 'Locked';
+      if (postFlying.engineer_signed_at) return 'Completed';
+      return 'In Progress';
+    }
+    return 'Locked';
+  };
+
+  const stages = [
+    { id: 0, title: 'Before Flying Service', icon: <FaTools />, short: 'BFS' },
+    { id: 1, title: 'Pilot Acceptance', icon: <FaUserShield />, short: 'Acceptance' },
+    { id: 2, title: 'Post Flying', icon: <FaClipboardCheck />, short: 'Post Flight' }
+  ];
+
+  const tradesmen = [
+    { key: 'ae', title: 'Air Engineer', short: 'AE' },
+    { key: 'al', title: 'Air Electrical', short: 'AL' },
+    { key: 'ao', title: 'Air Ordinance', short: 'AO' },
+    { key: 'ar', title: 'Air Radio', short: 'AR' },
+    { key: 'se', title: 'Senior Engineer', short: 'SE' }
+  ];
+
+  const isStageCompleted = (stage) => {
+    return getStageStatus(stage) === 'Completed';
+  };
 
   return (
     <div className="flying-operations">
-      <div className="page-header">
-        <h1 className="page-title">
-          <FaPlane /> Flying Operations
-        </h1>
-        <p className="page-subtitle">
-          Aircraft: {selectedAircraft?.aircraft_number} - {selectedAircraft?.model}
-        </p>
+      {/* Header */}
+      <div className="ops-header">
+        <div className="ops-header-content">
+          <div className="ops-title-section">
+            <h1>
+              <span className="ops-title-icon"><FaPlane /></span>
+              Flying Operations
+            </h1>
+            <p className="ops-subtitle">Complete three-stage aircraft operation workflow</p>
+          </div>
+          <div className="aircraft-badge">
+            <p className="aircraft-badge-title">Current Aircraft</p>
+            <p className="aircraft-badge-value">
+              {selectedAircraft?.aircraft_number} • {selectedAircraft?.model}
+            </p>
+          </div>
+        </div>
       </div>
 
-      {message.text && (
-        <div className={`message ${message.type}`}>
-          {message.text}
+      {/* Alert Messages */}
+      {alert.message && (
+        <div className={`alert ${alert.type}`}>
+          <div className="alert-icon">
+            {alert.type === 'success' && <FaCheckCircle />}
+            {alert.type === 'error' && <FaExclamationTriangle />}
+            {alert.type === 'warning' && <FaExclamationTriangle />}
+            {alert.type === 'info' && <FaInfoCircle />}
+          </div>
+          <div className="alert-content">
+            <p className="alert-message">{alert.message}</p>
+          </div>
         </div>
       )}
 
-      <div className="section-tabs">
-        <button
-          className={`tab-button ${activeSection === 'prepare' ? 'active' : ''}`}
-          onClick={() => setActiveSection('prepare')}
-        >
-          <FaPlane /> Prepare Flying (BFS)
-        </button>
-        <button
-          className={`tab-button ${activeSection === 'pilot-acceptance' ? 'active' : ''} ${!canAccessPilotAcceptance ? 'disabled' : ''}`}
-          onClick={() => canAccessPilotAcceptance && setActiveSection('pilot-acceptance')}
-          disabled={!canAccessPilotAcceptance}
-        >
-          <FaCheckCircle /> Pilot Acceptance
-          {!canAccessPilotAcceptance && <span className="lock-icon">🔒</span>}
-        </button>
-        <button
-          className={`tab-button ${activeSection === 'post-flying' ? 'active' : ''} ${!canAccessPostFlying ? 'disabled' : ''}`}
-          onClick={() => canAccessPostFlying && setActiveSection('post-flying')}
-          disabled={!canAccessPostFlying}
-        >
-          <FaClock /> Post Flying
-          {!canAccessPostFlying && <span className="lock-icon">🔒</span>}
-        </button>
+      {/* Timeline */}
+      <div className="timeline-container">
+        <div className="timeline">
+          {stages.map((stage) => (
+            <div
+              key={stage.id}
+              className={`timeline-step ${
+                currentStage === stage.id ? 'active' : ''
+              } ${isStageCompleted(stage.id) ? 'completed' : ''} ${
+                !canAccessStage(stage.id) ? 'locked' : ''
+              }`}
+              onClick={() => canAccessStage(stage.id) && setCurrentStage(stage.id)}
+            >
+              <div className="step-circle">
+                {isStageCompleted(stage.id) ? <FaCheckCircle /> : stage.icon}
+              </div>
+              <div className="step-info">
+                <p className="step-number">Step {stage.id + 1}</p>
+                <h3 className="step-title">{stage.short}</h3>
+                <p className="step-status">{getStageStatus(stage.id)}</p>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
-      {/* Prepare Flying Section */}
-      {activeSection === 'prepare' && (
-        <div className="section-content">
-          <h2 className="section-title">Before Flying Service (BFS)</h2>
+      {/* Stage Content */}
+      <div className="stage-content">
+        {/* Stage 0: Before Flying Service */}
+        {currentStage === 0 && (
+          <>
+            {!bfsRecord ? (
+              <div className="content-card">
+                <div className="card-header">
+                  <h2 className="card-title">
+                    <span className="card-title-icon"><FaTools /></span>
+                    Aircraft Preparation
+                  </h2>
+                  <span className="card-badge">Step 1/3</span>
+                </div>
 
-          {!bfsRecord && (
-            <div className="form-section">
-              <h3>Aircraft Parameters</h3>
-              <div className="form-grid">
-                <div className="form-group">
-                  <label>Fuel Level (Liters)</label>
-                  <input
-                    type="number"
-                    value={fuelLevel}
-                    onChange={(e) => setFuelLevel(e.target.value)}
-                    placeholder="Enter fuel level"
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Tire Pressure - Main (PSI)</label>
-                  <input
-                    type="number"
-                    value={tirePressureMain}
-                    onChange={(e) => setTirePressureMain(e.target.value)}
-                    placeholder="Enter main tire pressure"
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Tire Pressure - Nose (PSI)</label>
-                  <input
-                    type="number"
-                    value={tirePressureNose}
-                    onChange={(e) => setTirePressureNose(e.target.value)}
-                    placeholder="Enter nose tire pressure"
-                  />
+                <div className="form-section">
+                  <div className="section-header">
+                    <h3 className="section-title">
+                      <FaTachometerAlt /> Aircraft Parameters
+                    </h3>
+                    <p className="section-subtitle">Record initial aircraft readings before service</p>
+                  </div>
+
+                  <div className="form-grid">
+                    <div className="form-field">
+                      <label className="field-label">
+                        <FaGasPump /> Fuel Level <span className="required-mark">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        className="field-input"
+                        value={fuelLevel}
+                        onChange={(e) => setFuelLevel(e.target.value)}
+                        placeholder="Enter fuel level in liters"
+                      />
+                    </div>
+                    <div className="form-field">
+                      <label className="field-label">
+                        Main Tire Pressure <span className="required-mark">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        className="field-input"
+                        value={tirePressureMain}
+                        onChange={(e) => setTirePressureMain(e.target.value)}
+                        placeholder="PSI"
+                      />
+                    </div>
+                    <div className="form-field">
+                      <label className="field-label">
+                        Nose Tire Pressure <span className="required-mark">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        className="field-input"
+                        value={tirePressureNose}
+                        onChange={(e) => setTirePressureNose(e.target.value)}
+                        placeholder="PSI"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="checkbox-field" onClick={() => setSupervisorRequired(!supervisorRequired)}>
+                    <input
+                      type="checkbox"
+                      checked={supervisorRequired}
+                      onChange={(e) => setSupervisorRequired(e.target.checked)}
+                    />
+                    <span className="checkbox-label">Supervisor Signature Required</span>
+                  </div>
+
+                  <div className="form-field">
+                    <label className="field-label">Remarks</label>
+                    <textarea
+                      className="field-input"
+                      value={bfsRemarks}
+                      onChange={(e) => setBfsRemarks(e.target.value)}
+                      placeholder="Enter any additional remarks or notes..."
+                    />
+                  </div>
+
+                  <button className="btn btn-primary btn-lg" onClick={handleCreateBFS} disabled={loading}>
+                    <FaChevronRight className="btn-icon" />
+                    {loading ? 'Creating Record...' : 'Create BFS Record'}
+                  </button>
                 </div>
               </div>
+            ) : (
+              <>
+                {/* Tradesmen Signatures */}
+                <div className="content-card">
+                  <div className="card-header">
+                    <h2 className="card-title">
+                      <span className="card-title-icon"><FaUser /></span>
+                      Tradesman Signatures
+                    </h2>
+                  </div>
 
-              <div className="form-group">
-                <label className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={supervisorRequired}
-                    onChange={(e) => setSupervisorRequired(e.target.checked)}
-                  />
-                  Supervisor Signature Required
-                </label>
-              </div>
+                  <div className="progress-indicator">
+                    <div className="progress-header">
+                      <span className="progress-title">Completion Progress</span>
+                      <span className="progress-percentage">{getTradesmanProgress()}%</span>
+                    </div>
+                    <div className="progress-bar-container">
+                      <div className="progress-bar-fill" style={{ width: `${getTradesmanProgress()}%` }} />
+                    </div>
+                  </div>
 
-              <div className="form-group">
-                <label>Remarks</label>
-                <textarea
-                  value={bfsRemarks}
-                  onChange={(e) => setBfsRemarks(e.target.value)}
-                  placeholder="Enter any remarks"
-                  rows="3"
-                />
-              </div>
+                  <div className="signatures-grid">
+                    {tradesmen.map((trade) => (
+                      <div
+                        key={trade.key}
+                        className={`signature-card ${bfsRecord[`${trade.key}_signed_at`] ? 'signed' : 'pending'}`}
+                      >
+                        <div className="signature-header">
+                          <div className="signature-role">
+                            <div className={`role-avatar ${trade.key}`}>
+                              {trade.short}
+                            </div>
+                            <div className="role-info">
+                              <h4>{trade.title}</h4>
+                              <p className="role-description">{trade.short}</p>
+                            </div>
+                          </div>
+                          {bfsRecord[`${trade.key}_signed_at`] && (
+                            <FaCheckCircle className="signature-status-icon" />
+                          )}
+                        </div>
 
-              <button className="btn btn-primary" onClick={handleCreateBFS} disabled={loading}>
-                {loading ? 'Creating...' : 'Create BFS Record'}
-              </button>
-            </div>
-          )}
+                        {!bfsRecord[`${trade.key}_signed_at`] ? (
+                          <div className="signature-form">
+                            <div className="pin-input-group">
+                              <input
+                                type="password"
+                                className="pin-input"
+                                placeholder="Enter PIN"
+                                value={tradePins[trade.key]}
+                                onChange={(e) => setTradePins({ ...tradePins, [trade.key]: e.target.value })}
+                              />
+                              <button
+                                className="btn btn-sm btn-primary"
+                                onClick={() => handleTradesmanSign(trade.key)}
+                                disabled={loading}
+                              >
+                                <FaLock /> Sign
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="signature-details">
+                            <div className="detail-row">
+                              <span className="detail-label">Signed by:</span>
+                              <span className="detail-value">{bfsRecord[`${trade.key}_name`] || user.full_name}</span>
+                            </div>
+                            <p className="detail-timestamp">
+                              {new Date(bfsRecord[`${trade.key}_signed_at`]).toLocaleString()}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
 
-          {bfsRecord && (
-            <div className="signatures-section">
-              <h3>Tradesmen Signatures</h3>
-              <div className="signatures-grid">
-                {['ae', 'al', 'ao', 'ar', 'se'].map((trade) => (
-                  <div key={trade} className="signature-card">
-                    <div className="signature-header">
-                      <h4>{trade.toUpperCase()} - {
-                        trade === 'ae' ? 'Air Engineer' :
-                        trade === 'al' ? 'Air Electrical' :
-                        trade === 'ao' ? 'Air Ordinance' :
-                        trade === 'ar' ? 'Air Radio' :
-                        'Senior Engineer'
-                      }</h4>
-                      {bfsRecord[`${trade}_signed_at`] && (
-                        <FaCheckCircle className="signed-icon" />
+                {/* Supervisor Signature */}
+                {supervisorRequired && (
+                  <div className="content-card supervisor-card">
+                    <div className="card-header">
+                      <h2 className="card-title">
+                        <span className="card-title-icon"><FaUserShield /></span>
+                        Supervisor Approval
+                      </h2>
+                    </div>
+
+                    <div className={`signature-card ${bfsRecord.supervisor_signed_at ? 'signed' : 'pending'}`}>
+                      <div className="signature-header">
+                        <div className="signature-role">
+                          <div className="role-avatar supervisor">SUP</div>
+                          <div className="role-info">
+                            <h4>Supervisor</h4>
+                            <p className="role-description">Oversight & Approval</p>
+                          </div>
+                        </div>
+                        {bfsRecord.supervisor_signed_at && (
+                          <FaCheckCircle className="signature-status-icon" />
+                        )}
+                      </div>
+
+                      {!bfsRecord.supervisor_signed_at ? (
+                        <div className="signature-form">
+                          <div className="pin-input-group">
+                            <input
+                              type="password"
+                              className="pin-input"
+                              placeholder="Enter Supervisor PIN"
+                              value={supervisorPin}
+                              onChange={(e) => setSupervisorPin(e.target.value)}
+                            />
+                            <button
+                              className="btn btn-primary"
+                              onClick={handleSupervisorSign}
+                              disabled={loading}
+                            >
+                              <FaLock /> Sign as Supervisor
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="signature-details">
+                          <div className="detail-row">
+                            <span className="detail-label">Signed by:</span>
+                            <span className="detail-value">{bfsRecord.supervisor_name || user.full_name}</span>
+                          </div>
+                          <p className="detail-timestamp">
+                            {new Date(bfsRecord.supervisor_signed_at).toLocaleString()}
+                          </p>
+                        </div>
                       )}
                     </div>
-                    {!bfsRecord[`${trade}_signed_at`] ? (
-                      <div className="signature-form">
-                        <input
-                          type="password"
-                          placeholder="Enter PIN"
-                          value={tradePins[trade]}
-                          onChange={(e) => setTradePins({ ...tradePins, [trade]: e.target.value })}
-                        />
-                        <button
-                          className="btn btn-sm"
-                          onClick={() => handleTradesmanSign(trade)}
-                          disabled={loading}
-                        >
-                          Sign
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="signature-info">
-                        <p>Signed by: {bfsRecord[`${trade}_name`] || user.full_name}</p>
-                        <p className="timestamp">
-                          {new Date(bfsRecord[`${trade}_signed_at`]).toLocaleString()}
-                        </p>
-                      </div>
-                    )}
                   </div>
-                ))}
-              </div>
+                )}
 
-              {supervisorRequired && (
-                <div className="supervisor-section">
-                  <h3>Supervisor Signature</h3>
-                  <div className="signature-card">
-                    {!bfsRecord.supervisor_signed_at ? (
-                      <div className="signature-form">
-                        <input
-                          type="password"
-                          placeholder="Enter Supervisor PIN"
-                          value={supervisorPin}
-                          onChange={(e) => setSupervisorPin(e.target.value)}
-                        />
-                        <button
-                          className="btn btn-primary"
-                          onClick={handleSupervisorSign}
-                          disabled={loading}
-                        >
-                          Sign as Supervisor
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="signature-info">
-                        <FaCheckCircle className="signed-icon" />
-                        <p>Signed by: {bfsRecord.supervisor_name || user.full_name}</p>
-                        <p className="timestamp">
-                          {new Date(bfsRecord.supervisor_signed_at).toLocaleString()}
-                        </p>
-                      </div>
-                    )}
+                {/* FSI Approval */}
+                <div className="content-card fsi-approval-card">
+                  <div className="card-header">
+                    <h2 className="card-title">
+                      <span className="card-title-icon"><FaUserShield /></span>
+                      FSI Final Approval
+                    </h2>
                   </div>
-                </div>
-              )}
 
-              <div className="fsi-section">
-                <h3>FSI Approval <FaUserShield /></h3>
-                <div className="signature-card fsi-card">
                   {!bfsRecord.fsi_signed_at ? (
-                    <div className="signature-form">
-                      <p className="info-text">
-                        FSI approval is required to proceed to Pilot Acceptance
-                      </p>
-                      <input
-                        type="password"
-                        placeholder="Enter FSI PIN"
-                        value={fsiPin}
-                        onChange={(e) => setFsiPin(e.target.value)}
-                      />
-                      <button
-                        className="btn btn-success"
-                        onClick={handleFSISign}
-                        disabled={loading}
-                      >
-                        Approve as FSI
-                      </button>
-                    </div>
+                    <>
+                      <div className="warning-box">
+                        <FaExclamationTriangle className="warning-icon" />
+                        <p className="warning-text">
+                          FSI approval is <strong>required</strong> to proceed to Pilot Acceptance stage.
+                          Ensure all tradesman signatures are collected before FSI approval.
+                        </p>
+                      </div>
+
+                      <div className="signature-card pending">
+                        <div className="signature-header">
+                          <div className="signature-role">
+                            <div className="role-avatar fsi">FSI</div>
+                            <div className="role-info">
+                              <h4>Flight Safety Inspector</h4>
+                              <p className="role-description">Final Safety Approval</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="signature-form">
+                          <div className="pin-input-group">
+                            <input
+                              type="password"
+                              className="pin-input"
+                              placeholder="Enter FSI PIN"
+                              value={fsiPin}
+                              onChange={(e) => setFsiPin(e.target.value)}
+                            />
+                            <button
+                              className="btn btn-success btn-lg"
+                              onClick={handleFSISign}
+                              disabled={loading}
+                            >
+                              <FaCheckCircle className="btn-icon" />
+                              Approve & Unlock Next Stage
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </>
                   ) : (
-                    <div className="signature-info approved">
-                      <FaCheckCircle className="signed-icon" />
-                      <p>Approved by FSI: {bfsRecord.fsi_name || user.full_name}</p>
-                      <p className="timestamp">
-                        {new Date(bfsRecord.fsi_signed_at).toLocaleString()}
+                    <div className="completion-card">
+                      <FaCheckCircle className="completion-icon" />
+                      <h3 className="completion-title">FSI Approved!</h3>
+                      <p className="completion-message">
+                        Before Flying Service completed successfully
                       </p>
-                      <p className="success-message">
-                        ✓ Pilot Acceptance section is now available
-                      </p>
+                      <div className="signature-details">
+                        <div className="detail-row">
+                          <span className="detail-label">Approved by:</span>
+                          <span className="detail-value">{bfsRecord.fsi_name || user.full_name}</span>
+                        </div>
+                        <p className="detail-timestamp">
+                          {new Date(bfsRecord.fsi_signed_at).toLocaleString()}
+                        </p>
+                      </div>
+                      <button className="btn btn-primary btn-lg" onClick={() => setCurrentStage(1)}>
+                        <FaChevronRight className="btn-icon" />
+                        Proceed to Pilot Acceptance
+                      </button>
                     </div>
                   )}
                 </div>
+              </>
+            )}
+          </>
+        )}
+
+        {/* Stage 1: Pilot Acceptance */}
+        {currentStage === 1 && canAccessStage(1) && (
+          <>
+            {!pilotAcceptance ? (
+              <div className="content-card">
+                <div className="card-header">
+                  <h2 className="card-title">
+                    <span className="card-title-icon"><FaClipboardCheck /></span>
+                    Pre-Flight Inspection
+                  </h2>
+                  <span className="card-badge">Step 2/3</span>
+                </div>
+
+                <div className="form-section">
+                  <div className="section-header">
+                    <h3 className="section-title">
+                      <FaCheckCircle /> Safety Checks
+                    </h3>
+                    <p className="section-subtitle">Complete all pre-flight safety checks</p>
+                  </div>
+
+                  <div className="progress-indicator">
+                    <div className="progress-header">
+                      <span className="progress-title">Checklist Progress</span>
+                      <span className="progress-percentage">{getChecklistProgress()}%</span>
+                    </div>
+                    <div className="progress-bar-container">
+                      <div className="progress-bar-fill" style={{ width: `${getChecklistProgress()}%` }} />
+                    </div>
+                  </div>
+
+                  <div className="checklist-grid">
+                    {Object.keys(pilotChecks).map((check) => (
+                      <div
+                        key={check}
+                        className={`checklist-item ${pilotChecks[check] ? 'checked' : ''}`}
+                        onClick={() => setPilotChecks({ ...pilotChecks, [check]: !pilotChecks[check] })}
+                      >
+                        <input
+                          type="checkbox"
+                          className="checklist-checkbox"
+                          checked={pilotChecks[check]}
+                          onChange={(e) => setPilotChecks({ ...pilotChecks, [check]: e.target.checked })}
+                        />
+                        <span className="checklist-label">
+                          {check.replace(/_/g, ' ').replace(/check/g, '').toUpperCase()}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="section-header" style={{ marginTop: '2rem' }}>
+                    <h3 className="section-title">
+                      <FaTachometerAlt /> Current Readings
+                    </h3>
+                    <p className="section-subtitle">Record current aircraft parameters</p>
+                  </div>
+
+                  <div className="form-grid">
+                    <div className="form-field">
+                      <label className="field-label">
+                        <FaGasPump /> Current Fuel Level <span className="required-mark">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        className="field-input"
+                        value={currentReadings.current_fuel_level}
+                        onChange={(e) => setCurrentReadings({ ...currentReadings, current_fuel_level: e.target.value })}
+                        placeholder="Liters"
+                      />
+                    </div>
+                    <div className="form-field">
+                      <label className="field-label">
+                        Current Main Tire Pressure <span className="required-mark">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        className="field-input"
+                        value={currentReadings.current_tire_pressure_main}
+                        onChange={(e) => setCurrentReadings({ ...currentReadings, current_tire_pressure_main: e.target.value })}
+                        placeholder="PSI"
+                      />
+                    </div>
+                    <div className="form-field">
+                      <label className="field-label">
+                        Current Nose Tire Pressure <span className="required-mark">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        className="field-input"
+                        value={currentReadings.current_tire_pressure_nose}
+                        onChange={(e) => setCurrentReadings({ ...currentReadings, current_tire_pressure_nose: e.target.value })}
+                        placeholder="PSI"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="form-field">
+                    <label className="field-label">Remarks</label>
+                    <textarea
+                      className="field-input"
+                      value={acceptanceRemarks}
+                      onChange={(e) => setAcceptanceRemarks(e.target.value)}
+                      placeholder="Enter any additional remarks or observations..."
+                    />
+                  </div>
+
+                  <button className="btn btn-primary btn-lg" onClick={handleCreatePilotAcceptance} disabled={loading}>
+                    <FaChevronRight className="btn-icon" />
+                    {loading ? 'Creating Record...' : 'Create Acceptance Record'}
+                  </button>
+                </div>
               </div>
-            </div>
-          )}
-        </div>
-      )}
+            ) : !pilotAcceptance.pilot_signed_at ? (
+              <div className="content-card">
+                <div className="card-header">
+                  <h2 className="card-title">
+                    <span className="card-title-icon"><FaUserShield /></span>
+                    Pilot Signature Required
+                  </h2>
+                </div>
 
-      {/* Pilot Acceptance Section */}
-      {activeSection === 'pilot-acceptance' && canAccessPilotAcceptance && (
-        <div className="section-content">
-          <h2 className="section-title">Pilot Acceptance</h2>
+                <div className="info-box">
+                  <FaInfoCircle className="info-icon" />
+                  <p className="info-text">
+                    Review all parameters and safety checks. Provide your PIN to accept the aircraft and proceed to flight operations.
+                  </p>
+                </div>
 
-          {!pilotAcceptance && (
-            <div className="form-section">
-              <h3>Aircraft Parameter Checks</h3>
-              <div className="checks-grid">
-                {Object.keys(pilotChecks).map((check) => (
-                  <label key={check} className="checkbox-label check-item">
+                <div className="signature-card pending">
+                  <div className="signature-header">
+                    <div className="signature-role">
+                      <div className="role-avatar pilot">PLT</div>
+                      <div className="role-info">
+                        <h4>Pilot Acceptance</h4>
+                        <p className="role-description">Aircraft Commander</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="signature-form">
+                    <div className="pin-input-group">
+                      <input
+                        type="password"
+                        className="pin-input"
+                        placeholder="Enter Pilot PIN"
+                        value={pilotPin}
+                        onChange={(e) => setPilotPin(e.target.value)}
+                      />
+                      <button
+                        className="btn btn-success btn-lg"
+                        onClick={handlePilotSign}
+                        disabled={loading}
+                      >
+                        <FaCheckCircle className="btn-icon" />
+                        Accept Aircraft
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="content-card">
+                <div className="completion-card">
+                  <FaCheckCircle className="completion-icon" />
+                  <h3 className="completion-title">Aircraft Accepted!</h3>
+                  <p className="completion-message">
+                    Pre-flight inspection completed successfully
+                  </p>
+                  <div className="signature-details">
+                    <div className="detail-row">
+                      <span className="detail-label">Accepted by:</span>
+                      <span className="detail-value">{pilotAcceptance.pilot_name || user.full_name}</span>
+                    </div>
+                    <p className="detail-timestamp">
+                      {new Date(pilotAcceptance.pilot_signed_at).toLocaleString()}
+                    </p>
+                  </div>
+                  <button className="btn btn-primary btn-lg" onClick={() => setCurrentStage(2)}>
+                    <FaChevronRight className="btn-icon" />
+                    Proceed to Post Flying
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Stage 2: Post Flying */}
+        {currentStage === 2 && canAccessStage(2) && (
+          <>
+            {!postFlying ? (
+              <div className="content-card">
+                <div className="card-header">
+                  <h2 className="card-title">
+                    <span className="card-title-icon"><FaClock /></span>
+                    Post-Flight Report
+                  </h2>
+                  <span className="card-badge">Step 3/3</span>
+                </div>
+
+                <div className="form-section">
+                  <div className="section-header">
+                    <h3 className="section-title">
+                      <FaPlane /> Flight Details
+                    </h3>
+                    <p className="section-subtitle">Record flight operation data</p>
+                  </div>
+
+                  <div className="form-grid">
+                    <div className="form-field">
+                      <label className="field-label">
+                        <FaClock /> Flight Hours <span className="required-mark">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        className="field-input"
+                        value={flightHours}
+                        onChange={(e) => setFlightHours(e.target.value)}
+                        placeholder="Hours"
+                      />
+                    </div>
+                    <div className="form-field">
+                      <label className="field-label">
+                        <FaGasPump /> Fuel Consumed <span className="required-mark">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        className="field-input"
+                        value={fuelConsumed}
+                        onChange={(e) => setFuelConsumed(e.target.value)}
+                        placeholder="Liters"
+                      />
+                    </div>
+                    <div className="form-field">
+                      <label className="field-label">
+                        <FaGasPump /> Fuel Level After <span className="required-mark">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        className="field-input"
+                        value={fuelLevelAfter}
+                        onChange={(e) => setFuelLevelAfter(e.target.value)}
+                        placeholder="Liters"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="section-header" style={{ marginTop: '2rem' }}>
+                    <h3 className="section-title">
+                      <FaCog /> Post-Flight Inspection
+                    </h3>
+                    <p className="section-subtitle">Record aircraft condition after flight</p>
+                  </div>
+
+                  <div className="form-grid">
+                    <div className="form-field">
+                      <label className="field-label">Main Tire Pressure After</label>
+                      <input
+                        type="number"
+                        className="field-input"
+                        value={tirePressureMainAfter}
+                        onChange={(e) => setTirePressureMainAfter(e.target.value)}
+                        placeholder="PSI"
+                      />
+                    </div>
+                    <div className="form-field">
+                      <label className="field-label">Nose Tire Pressure After</label>
+                      <input
+                        type="number"
+                        className="field-input"
+                        value={tirePressureNoseAfter}
+                        onChange={(e) => setTirePressureNoseAfter(e.target.value)}
+                        placeholder="PSI"
+                      />
+                    </div>
+                    <div className="form-field">
+                      <label className="field-label">Engine Condition</label>
+                      <input
+                        type="text"
+                        className="field-input"
+                        value={engineCondition}
+                        onChange={(e) => setEngineCondition(e.target.value)}
+                        placeholder="e.g., Good, Fair, Needs Attention"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="form-field">
+                    <label className="field-label">Issues Found</label>
+                    <textarea
+                      className="field-input"
+                      value={issuesFound}
+                      onChange={(e) => setIssuesFound(e.target.value)}
+                      placeholder="Describe any issues found during or after flight..."
+                    />
+                  </div>
+
+                  <div className="checkbox-field" onClick={() => setDefectsReported(!defectsReported)}>
                     <input
                       type="checkbox"
-                      checked={pilotChecks[check]}
-                      onChange={(e) => setPilotChecks({ ...pilotChecks, [check]: e.target.checked })}
+                      checked={defectsReported}
+                      onChange={(e) => setDefectsReported(e.target.checked)}
                     />
-                    <span>{check.replace(/_/g, ' ').replace(/check/g, '').toUpperCase()}</span>
-                  </label>
-                ))}
-              </div>
+                    <span className="checkbox-label">Defects Reported</span>
+                  </div>
 
-              <h3>Current Readings</h3>
-              <div className="form-grid">
-                <div className="form-group">
-                  <label>Current Fuel Level (Liters)</label>
-                  <input
-                    type="number"
-                    value={currentReadings.current_fuel_level}
-                    onChange={(e) => setCurrentReadings({ ...currentReadings, current_fuel_level: e.target.value })}
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Current Tire Pressure - Main (PSI)</label>
-                  <input
-                    type="number"
-                    value={currentReadings.current_tire_pressure_main}
-                    onChange={(e) => setCurrentReadings({ ...currentReadings, current_tire_pressure_main: e.target.value })}
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Current Tire Pressure - Nose (PSI)</label>
-                  <input
-                    type="number"
-                    value={currentReadings.current_tire_pressure_nose}
-                    onChange={(e) => setCurrentReadings({ ...currentReadings, current_tire_pressure_nose: e.target.value })}
-                  />
-                </div>
-              </div>
-
-              <div className="form-group">
-                <label>Remarks</label>
-                <textarea
-                  value={acceptanceRemarks}
-                  onChange={(e) => setAcceptanceRemarks(e.target.value)}
-                  placeholder="Enter any remarks"
-                  rows="3"
-                />
-              </div>
-
-              <button className="btn btn-primary" onClick={handleCreatePilotAcceptance} disabled={loading}>
-                {loading ? 'Creating...' : 'Create Pilot Acceptance'}
-              </button>
-            </div>
-          )}
-
-          {pilotAcceptance && !pilotAcceptance.pilot_signed_at && (
-            <div className="signature-section">
-              <h3>Pilot Signature</h3>
-              <div className="signature-card">
-                <p className="info-text">
-                  Pilot must review all parameters and provide signature PIN to accept the aircraft
-                </p>
-                <input
-                  type="password"
-                  placeholder="Enter Pilot PIN"
-                  value={pilotPin}
-                  onChange={(e) => setPilotPin(e.target.value)}
-                />
-                <button
-                  className="btn btn-success"
-                  onClick={handlePilotSign}
-                  disabled={loading}
-                >
-                  Accept Aircraft
-                </button>
-              </div>
-            </div>
-          )}
-
-          {pilotAcceptance && pilotAcceptance.pilot_signed_at && (
-            <div className="signature-info approved">
-              <FaCheckCircle className="signed-icon" />
-              <h3>Aircraft Accepted</h3>
-              <p>Accepted by: {pilotAcceptance.pilot_name || user.full_name}</p>
-              <p className="timestamp">
-                {new Date(pilotAcceptance.pilot_signed_at).toLocaleString()}
-              </p>
-              <p className="success-message">
-                ✓ Post Flying section is now available
-              </p>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Post Flying Section */}
-      {activeSection === 'post-flying' && canAccessPostFlying && (
-        <div className="section-content">
-          <h2 className="section-title">Post Flying</h2>
-
-          {!postFlying && (
-            <div className="form-section">
-              <h3>Flight Details</h3>
-              <div className="form-grid">
-                <div className="form-group">
-                  <label>Flight Hours</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={flightHours}
-                    onChange={(e) => setFlightHours(e.target.value)}
-                    placeholder="Enter flight hours"
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Fuel Consumed (Liters)</label>
-                  <input
-                    type="number"
-                    value={fuelConsumed}
-                    onChange={(e) => setFuelConsumed(e.target.value)}
-                    placeholder="Enter fuel consumed"
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Fuel Level After (Liters)</label>
-                  <input
-                    type="number"
-                    value={fuelLevelAfter}
-                    onChange={(e) => setFuelLevelAfter(e.target.value)}
-                    placeholder="Enter remaining fuel"
-                  />
-                </div>
-              </div>
-
-              <h3>Post-Flight Inspection</h3>
-              <div className="form-grid">
-                <div className="form-group">
-                  <label>Tire Pressure - Main After (PSI)</label>
-                  <input
-                    type="number"
-                    value={tirePressureMainAfter}
-                    onChange={(e) => setTirePressureMainAfter(e.target.value)}
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Tire Pressure - Nose After (PSI)</label>
-                  <input
-                    type="number"
-                    value={tirePressureNoseAfter}
-                    onChange={(e) => setTirePressureNoseAfter(e.target.value)}
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Engine Condition</label>
-                  <input
-                    type="text"
-                    value={engineCondition}
-                    onChange={(e) => setEngineCondition(e.target.value)}
-                    placeholder="e.g., Good, Fair, Needs Attention"
-                  />
-                </div>
-              </div>
-
-              <div className="form-group">
-                <label>Issues Found</label>
-                <textarea
-                  value={issuesFound}
-                  onChange={(e) => setIssuesFound(e.target.value)}
-                  placeholder="Describe any issues found during or after flight"
-                  rows="3"
-                />
-              </div>
-
-              <label className="checkbox-label">
-                <input
-                  type="checkbox"
-                  checked={defectsReported}
-                  onChange={(e) => setDefectsReported(e.target.checked)}
-                />
-                Defects Reported
-              </label>
-
-              <div className="form-group">
-                <label>Remarks</label>
-                <textarea
-                  value={postFlyingRemarks}
-                  onChange={(e) => setPostFlyingRemarks(e.target.value)}
-                  placeholder="Enter any additional remarks"
-                  rows="3"
-                />
-              </div>
-
-              <button className="btn btn-primary" onClick={handleCreatePostFlying} disabled={loading}>
-                {loading ? 'Creating...' : 'Create Post Flying Record'}
-              </button>
-            </div>
-          )}
-
-          {postFlying && (
-            <div className="signatures-section">
-              <h3>Signatures</h3>
-
-              <div className="signature-card">
-                <h4>Pilot Signature</h4>
-                {!postFlying.pilot_signed_at ? (
-                  <div className="signature-form">
-                    <input
-                      type="password"
-                      placeholder="Enter Pilot PIN"
-                      value={postFlyingPilotPin}
-                      onChange={(e) => setPostFlyingPilotPin(e.target.value)}
+                  <div className="form-field">
+                    <label className="field-label">Remarks</label>
+                    <textarea
+                      className="field-input"
+                      value={postFlyingRemarks}
+                      onChange={(e) => setPostFlyingRemarks(e.target.value)}
+                      placeholder="Enter any additional remarks..."
                     />
-                    <button
-                      className="btn btn-primary"
-                      onClick={handlePostFlyingPilotSign}
-                      disabled={loading}
-                    >
-                      Sign as Pilot
-                    </button>
                   </div>
-                ) : (
-                  <div className="signature-info">
-                    <FaCheckCircle className="signed-icon" />
-                    <p>Signed by: {postFlying.pilot_name || user.full_name}</p>
-                    <p className="timestamp">
-                      {new Date(postFlying.pilot_signed_at).toLocaleString()}
-                    </p>
-                  </div>
-                )}
-              </div>
 
-              <div className="signature-card">
-                <h4>Engineer Signature</h4>
-                {!postFlying.engineer_signed_at ? (
-                  <div className="signature-form">
-                    <p className="info-text">
-                      Engineer signature completes the post-flight process and updates aircraft data
-                    </p>
-                    <input
-                      type="password"
-                      placeholder="Enter Engineer PIN"
-                      value={engineerPin}
-                      onChange={(e) => setEngineerPin(e.target.value)}
-                    />
-                    <button
-                      className="btn btn-success"
-                      onClick={handleEngineerSign}
-                      disabled={loading}
-                    >
-                      Sign as Engineer & Complete
-                    </button>
-                  </div>
-                ) : (
-                  <div className="signature-info approved">
-                    <FaCheckCircle className="signed-icon" />
-                    <p>Signed by: {postFlying.engineer_name || user.full_name}</p>
-                    <p className="timestamp">
-                      {new Date(postFlying.engineer_signed_at).toLocaleString()}
-                    </p>
-                    <p className="success-message">
-                      ✓ Post-flight process completed! Aircraft data has been updated.
-                    </p>
-                  </div>
-                )}
+                  <button className="btn btn-primary btn-lg" onClick={handleCreatePostFlying} disabled={loading}>
+                    <FaChevronRight className="btn-icon" />
+                    {loading ? 'Creating Record...' : 'Create Post-Flight Record'}
+                  </button>
+                </div>
               </div>
-            </div>
-          )}
-        </div>
-      )}
+            ) : (
+              <>
+                <div className="content-card">
+                  <div className="card-header">
+                    <h2 className="card-title">
+                      <span className="card-title-icon"><FaUser /></span>
+                      Required Signatures
+                    </h2>
+                  </div>
+
+                  <div className="signatures-grid">
+                    {/* Pilot Signature */}
+                    <div className={`signature-card ${postFlying.pilot_signed_at ? 'signed' : 'pending'}`}>
+                      <div className="signature-header">
+                        <div className="signature-role">
+                          <div className="role-avatar pilot">PLT</div>
+                          <div className="role-info">
+                            <h4>Pilot</h4>
+                            <p className="role-description">Flight Commander</p>
+                          </div>
+                        </div>
+                        {postFlying.pilot_signed_at && (
+                          <FaCheckCircle className="signature-status-icon" />
+                        )}
+                      </div>
+
+                      {!postFlying.pilot_signed_at ? (
+                        <div className="signature-form">
+                          <div className="pin-input-group">
+                            <input
+                              type="password"
+                              className="pin-input"
+                              placeholder="Enter Pilot PIN"
+                              value={postFlyingPilotPin}
+                              onChange={(e) => setPostFlyingPilotPin(e.target.value)}
+                            />
+                            <button
+                              className="btn btn-sm btn-primary"
+                              onClick={handlePostFlyingPilotSign}
+                              disabled={loading}
+                            >
+                              <FaLock /> Sign
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="signature-details">
+                          <div className="detail-row">
+                            <span className="detail-label">Signed by:</span>
+                            <span className="detail-value">{postFlying.pilot_name || user.full_name}</span>
+                          </div>
+                          <p className="detail-timestamp">
+                            {new Date(postFlying.pilot_signed_at).toLocaleString()}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Engineer Signature */}
+                    <div className={`signature-card ${postFlying.engineer_signed_at ? 'signed' : 'pending'}`}>
+                      <div className="signature-header">
+                        <div className="signature-role">
+                          <div className="role-avatar engineer">ENG</div>
+                          <div className="role-info">
+                            <h4>Engineer</h4>
+                            <p className="role-description">Final Verification</p>
+                          </div>
+                        </div>
+                        {postFlying.engineer_signed_at && (
+                          <FaCheckCircle className="signature-status-icon" />
+                        )}
+                      </div>
+
+                      {!postFlying.engineer_signed_at ? (
+                        <div className="signature-form">
+                          <div className="info-box" style={{ marginBottom: '1rem' }}>
+                            <FaInfoCircle className="info-icon" />
+                            <p className="info-text">
+                              Engineer signature completes the operation and updates aircraft data
+                            </p>
+                          </div>
+                          <div className="pin-input-group">
+                            <input
+                              type="password"
+                              className="pin-input"
+                              placeholder="Enter Engineer PIN"
+                              value={engineerPin}
+                              onChange={(e) => setEngineerPin(e.target.value)}
+                            />
+                            <button
+                              className="btn btn-success"
+                              onClick={handleEngineerSign}
+                              disabled={loading}
+                            >
+                              <FaCheckCircle className="btn-icon" />
+                              Sign & Complete
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="signature-details">
+                          <div className="detail-row">
+                            <span className="detail-label">Signed by:</span>
+                            <span className="detail-value">{postFlying.engineer_name || user.full_name}</span>
+                          </div>
+                          <p className="detail-timestamp">
+                            {new Date(postFlying.engineer_signed_at).toLocaleString()}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {postFlying.engineer_signed_at && (
+                    <div className="completion-card" style={{ marginTop: '2rem' }}>
+                      <FaCheckCircle className="completion-icon" />
+                      <h3 className="completion-title">Flight Operation Completed!</h3>
+                      <p className="completion-message">
+                        All stages completed successfully. Aircraft data has been updated.
+                      </p>
+                      <div className="completion-details">
+                        <div className="completion-detail">
+                          <FaClock className="detail-icon" />
+                          <p className="detail-title">Flight Hours</p>
+                          <p className="detail-info">{postFlying.flight_hours} hrs</p>
+                        </div>
+                        <div className="completion-detail">
+                          <FaGasPump className="detail-icon" />
+                          <p className="detail-title">Fuel Consumed</p>
+                          <p className="detail-info">{postFlying.fuel_consumed} L</p>
+                        </div>
+                        <div className="completion-detail">
+                          <FaCheckCircle className="detail-icon" />
+                          <p className="detail-title">Status</p>
+                          <p className="detail-info">Completed</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 };

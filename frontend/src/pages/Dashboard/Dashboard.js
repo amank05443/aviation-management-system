@@ -61,10 +61,15 @@ const Dashboard = () => {
     }
   };
 
-  if (!selectedAircraft) {
-    return null;
-  }
-
+  if (!selectedAircraft && !loading) {
+  return (
+    <div className="dashboard">
+      <h2 style={{ textAlign: 'center', padding: '3rem', color: 'var(--primary-violet)' }}>
+        No aircraft selected — showing general overview
+      </h2>
+    </div>
+  );
+}
   if (loading) {
     return (
       <div className="dashboard">

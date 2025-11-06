@@ -277,6 +277,8 @@ class MaintenanceForecast(models.Model):
 
 class BeforeFlyingService(models.Model):
     STATUS_CHOICES = [
+        ('FSI_INITIAL', 'FSI Initial Authentication'),
+        ('PERSONNEL_SELECTION', 'Personnel Selection'),
         ('IN_PROGRESS', 'In Progress'),
         ('COMPLETED', 'Completed'),
         ('FSI_APPROVED', 'FSI Approved'),
@@ -284,7 +286,21 @@ class BeforeFlyingService(models.Model):
 
     aircraft = models.ForeignKey(Aircraft, on_delete=models.CASCADE, related_name='bfs_records')
     service_date = models.DateTimeField(default=timezone.now)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='IN_PROGRESS')
+    status = models.CharField(max_length=30, choices=STATUS_CHOICES, default='FSI_INITIAL')
+
+    # FSI Initial Authentication
+    fsi_initial_signature = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='bfs_fsi_initial')
+    fsi_initial_pin = models.CharField(max_length=10, blank=True, null=True)
+    fsi_initial_signed_at = models.DateTimeField(blank=True, null=True)
+
+    # Personnel Assignment
+    personnel_added = models.BooleanField(default=False)
+    assigned_ae = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='bfs_assigned_ae')
+    assigned_al = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='bfs_assigned_al')
+    assigned_ao = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='bfs_assigned_ao')
+    assigned_ar = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='bfs_assigned_ar')
+    assigned_se = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='bfs_assigned_se')
+    assigned_supervisor = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='bfs_assigned_supervisor')
 
     # Tradesmen Signatures with PINs
     ae_signature = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='bfs_ae_signed')
@@ -384,6 +400,12 @@ class PostFlying(models.Model):
     STATUS_CHOICES = [
         ('IN_PROGRESS', 'In Progress'),
         ('COMPLETED', 'Completed'),
+        ('TERMINATED', 'Terminated'),
+    ]
+
+    FLIGHT_STATUS_CHOICES = [
+        ('COMPLETED', 'Completed'),
+        ('TERMINATED', 'Terminated'),
     ]
 
     pilot_acceptance = models.OneToOneField(PilotAcceptance, on_delete=models.CASCADE, related_name='post_flying')
@@ -391,10 +413,15 @@ class PostFlying(models.Model):
     post_flight_date = models.DateTimeField(default=timezone.now)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='IN_PROGRESS')
 
+    # Flight completion status
+    flight_status = models.CharField(max_length=20, choices=FLIGHT_STATUS_CHOICES, blank=True, null=True)
+    termination_reason = models.TextField(blank=True, null=True, help_text='Reason for flight termination')
+
     # Flight details
-    flight_hours = models.DecimalField(max_digits=5, decimal_places=2)
-    fuel_consumed = models.DecimalField(max_digits=10, decimal_places=2)
-    fuel_level_after = models.DecimalField(max_digits=10, decimal_places=2)
+    flight_hours = models.DecimalField(max_digits=5, decimal_places=2, blank=True, null=True)
+    number_of_landings = models.IntegerField(default=0, help_text='Number of landings during flight')
+    fuel_consumed = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
+    fuel_level_after = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
 
     # Post-flight inspection
     tire_pressure_main_after = models.DecimalField(max_digits=5, decimal_places=2, blank=True, null=True)

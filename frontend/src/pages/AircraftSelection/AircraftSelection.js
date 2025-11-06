@@ -2,14 +2,15 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import axios from 'axios';
-import { FaPlane, FaHelicopter, FaJetFighterUp } from 'react-icons/fa6';
+import { FaPlane, FaHelicopter, FaJetFighterUp, FaCircleCheck } from 'react-icons/fa6';
 import './AircraftSelection.css';
 
 const AircraftSelection = () => {
   const [aircraftTypes, setAircraftTypes] = useState([]);
   const [selectedType, setSelectedType] = useState('');
   const [aircraftList, setAircraftList] = useState([]);
-  const [selectedAircraft, setSelectedAircraft] = useState(null);
+  const [selectedAircraft, setSelectedAircraft] = useState('');
+  const [aircraftDetails, setAircraftDetails] = useState(null);
   const [loading, setLoading] = useState(true);
   const { selectAircraft } = useAuth();
   const navigate = useNavigate();
@@ -21,8 +22,19 @@ const AircraftSelection = () => {
   useEffect(() => {
     if (selectedType) {
       fetchAircraftByType(selectedType);
+      setSelectedAircraft('');
+      setAircraftDetails(null);
     }
   }, [selectedType]);
+
+  useEffect(() => {
+    if (selectedAircraft) {
+      const aircraft = aircraftList.find(a => a.id.toString() === selectedAircraft);
+      setAircraftDetails(aircraft);
+    } else {
+      setAircraftDetails(null);
+    }
+  }, [selectedAircraft, aircraftList]);
 
   const fetchAircraftTypes = async () => {
     try {
@@ -67,96 +79,132 @@ const AircraftSelection = () => {
   };
 
   const handleProceed = () => {
-    if (selectedAircraft) {
-      selectAircraft(selectedAircraft);
-      navigate('/dashboard');
+    if (aircraftDetails) {
+      selectAircraft(aircraftDetails);
     }
+    navigate('/dashboard');
   };
 
   if (loading) {
     return (
       <div className="aircraft-selection-container">
-        <div className="loading-state">Loading aircraft types...</div>
+        <div className="loading-spinner">
+          <div className="spinner"></div>
+          <p>Loading aircraft...</p>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="aircraft-selection-container">
-      <div className="selection-header">
-        <h1>Select Aircraft</h1>
-        <p>Choose aircraft type and number to proceed</p>
-      </div>
-
-      <div className="selection-content">
-        <div className="selection-card">
-          <h2>Step 1: Select Aircraft Type</h2>
-          <div className="aircraft-types-grid">
-            {aircraftTypes.map((type) => (
-              <div
-                key={type}
-                className={`aircraft-type-card ${selectedType === type ? 'selected' : ''}`}
-                onClick={() => {
-                  setSelectedType(type);
-                  setSelectedAircraft(null);
-                }}
-              >
-                <div className="aircraft-type-icon">
-                  {getTypeIcon(type)}
-                </div>
-                <div className="aircraft-type-name">
-                  {getTypeName(type)}
-                </div>
-              </div>
-            ))}
+      <div className="selection-wrapper">
+        <div className="selection-card-modern">
+          {/* Header */}
+          <div className="selection-header-modern">
+            <div className="header-icon">
+              <FaPlane />
+            </div>
+            <h1>Aircraft Selection</h1>
+            <p>Select your aircraft to begin operations</p>
           </div>
-        </div>
 
-        {selectedType && (
-          <div className="selection-card">
-            <h2>Step 2: Select Aircraft Number</h2>
-            {aircraftList.length > 0 ? (
-              <div className="aircraft-list-grid">
-                {aircraftList.map((aircraft) => (
-                  <div
-                    key={aircraft.id}
-                    className={`aircraft-item-card ${selectedAircraft?.id === aircraft.id ? 'selected' : ''}`}
-                    onClick={() => setSelectedAircraft(aircraft)}
-                  >
-                    <div className="aircraft-item-number">
-                      {aircraft.aircraft_number}
-                    </div>
-                    <div className="aircraft-item-model">
-                      {aircraft.model}
-                    </div>
-                    <div className={`aircraft-item-status status-${aircraft.status.toLowerCase()}`}>
-                      {aircraft.status}
-                    </div>
-                  </div>
+          {/* Selection Form */}
+          <div className="selection-form">
+            {/* Aircraft Type Dropdown */}
+            <div className="form-group">
+              <label htmlFor="aircraft-type">
+                <span className="label-icon">{getTypeIcon(selectedType)}</span>
+                Aircraft Type
+              </label>
+              <select
+                id="aircraft-type"
+                className="modern-select"
+                value={selectedType}
+                onChange={(e) => setSelectedType(e.target.value)}
+              >
+                <option value="">-- Select Aircraft Type --</option>
+                {aircraftTypes.map((type) => (
+                  <option key={type} value={type}>
+                    {getTypeName(type)}
+                  </option>
                 ))}
+              </select>
+            </div>
+
+            {/* Aircraft Number Dropdown */}
+            {selectedType && (
+              <div className="form-group animate-in">
+                <label htmlFor="aircraft-number">
+                  <span className="label-icon">
+                    <FaCircleCheck />
+                  </span>
+                  Aircraft Number
+                </label>
+                {aircraftList.length > 0 ? (
+                  <select
+                    id="aircraft-number"
+                    className="modern-select"
+                    value={selectedAircraft}
+                    onChange={(e) => setSelectedAircraft(e.target.value)}
+                  >
+                    <option value="">-- Select Aircraft --</option>
+                    {aircraftList.map((aircraft) => (
+                      <option key={aircraft.id} value={aircraft.id}>
+                        {aircraft.aircraft_number} - {aircraft.model} ({aircraft.status})
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="empty-message">
+                    No aircraft available for this type
+                  </div>
+                )}
               </div>
-            ) : (
-              <div className="empty-state">
-                <div className="empty-state-icon">
-                  <FaPlane />
+            )}
+
+            {/* Aircraft Details Card */}
+            {aircraftDetails && (
+              <div className="aircraft-details-card animate-in">
+                <div className="details-header">
+                  <div className="details-icon">
+                    {getTypeIcon(selectedType)}
+                  </div>
+                  <div className="details-title">
+                    <h3>{aircraftDetails.aircraft_number}</h3>
+                    <span className="details-subtitle">{aircraftDetails.model}</span>
+                  </div>
                 </div>
-                <p>No aircraft available for this type</p>
+                <div className="details-body">
+                  <div className="detail-item">
+                    <span className="detail-label">Type:</span>
+                    <span className="detail-value">{getTypeName(aircraftDetails.aircraft_type)}</span>
+                  </div>
+                  <div className="detail-item">
+                    <span className="detail-label">Status:</span>
+                    <span className={`status-badge status-${aircraftDetails.status.toLowerCase()}`}>
+                      {aircraftDetails.status}
+                    </span>
+                  </div>
+                  <div className="detail-item">
+                    <span className="detail-label">Model:</span>
+                    <span className="detail-value">{aircraftDetails.model}</span>
+                  </div>
+                </div>
               </div>
             )}
           </div>
-        )}
 
-        <button
-  className={`proceed-button ${!selectedAircraft ? 'skip-selection' : ''}`}
-  onClick={() => {
-    if (selectedAircraft) {
-      selectAircraft(selectedAircraft);
-    }
-    navigate('/dashboard');
-  }}
->
-  {selectedAircraft ? 'Proceed to Dashboard' : 'Skip & Go to Dashboard'}
-</button>
+          {/* Action Buttons */}
+          <div className="action-buttons">
+            <button
+              className="btn-proceed"
+              onClick={handleProceed}
+            >
+              {aircraftDetails ? 'Proceed to Dashboard' : 'Skip & Go to Dashboard'}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

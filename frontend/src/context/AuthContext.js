@@ -22,8 +22,17 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     // Set axios default authorization header
     if (token) {
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      fetchUserProfile();
+      // Check if this is a guest token
+      if (token.startsWith('guest_token_')) {
+        const guestUser = JSON.parse(localStorage.getItem('guest_user'));
+        if (guestUser) {
+          setUser(guestUser);
+        }
+        setLoading(false);
+      } else {
+        axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+        fetchUserProfile();
+      }
     } else {
       setLoading(false);
     }
@@ -84,6 +93,33 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const guestLogin = async () => {
+    try {
+      // Create a guest user token and set it as logged in
+      const guestUser = {
+        id: 'guest',
+        pno: 'GUEST',
+        full_name: 'Guest User',
+        rank: 'Guest',
+        is_guest: true
+      };
+
+      const guestToken = 'guest_token_' + Date.now();
+
+      setUser(guestUser);
+      setToken(guestToken);
+      localStorage.setItem('access_token', guestToken);
+      localStorage.setItem('guest_user', JSON.stringify(guestUser));
+
+      return { success: true };
+    } catch (error) {
+      return {
+        success: false,
+        error: 'Failed to login as guest. Please try again.'
+      };
+    }
+  };
+
   const logout = () => {
     setUser(null);
     setToken(null);
@@ -91,6 +127,7 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');
     localStorage.removeItem('selected_aircraft');
+    localStorage.removeItem('guest_user');
     delete axios.defaults.headers.common['Authorization'];
   };
 
@@ -106,6 +143,7 @@ export const AuthProvider = ({ children }) => {
     loading,
     login,
     signup,
+    guestLogin,
     logout,
     selectAircraft,
   };

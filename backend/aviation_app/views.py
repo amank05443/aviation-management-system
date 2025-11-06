@@ -223,6 +223,76 @@ class BeforeFlyingServiceViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(aircraft_id=aircraft_id)
         return queryset
 
+    @action(detail=False, methods=['get'])
+    def available_personnel(self, request):
+        """Get list of available users for personnel selection"""
+        users = User.objects.filter(is_active=True).values('id', 'pno', 'full_name', 'rank', 'designation')
+        return Response(users)
+
+    @action(detail=True, methods=['post'])
+    def fsi_initial_auth(self, request, pk=None):
+        """FSI initial authentication to start BFS process"""
+        bfs = self.get_object()
+        pin = request.data.get('pin')
+
+        if not pin:
+            return Response({'error': 'PIN is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if bfs.fsi_initial_signed_at:
+            return Response({'error': 'FSI has already authenticated'}, status=status.HTTP_400_BAD_REQUEST)
+
+        bfs.fsi_initial_signature = request.user
+        bfs.fsi_initial_pin = pin
+        bfs.fsi_initial_signed_at = timezone.now()
+        bfs.status = 'PERSONNEL_SELECTION'
+        bfs.save()
+
+        serializer = self.get_serializer(bfs)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['post'])
+    def assign_personnel(self, request, pk=None):
+        """FSI assigns personnel (tradesmen and supervisor) for BFS"""
+        bfs = self.get_object()
+
+        if not bfs.fsi_initial_signed_at:
+            return Response({'error': 'FSI must authenticate first'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Get personnel IDs from request
+        assigned_ae_id = request.data.get('assigned_ae')
+        assigned_al_id = request.data.get('assigned_al')
+        assigned_ao_id = request.data.get('assigned_ao')
+        assigned_ar_id = request.data.get('assigned_ar')
+        assigned_se_id = request.data.get('assigned_se')
+        assigned_supervisor_id = request.data.get('assigned_supervisor')
+        supervisor_required = request.data.get('supervisor_required', False)
+
+        # Validate at least AE is assigned
+        if not assigned_ae_id:
+            return Response({'error': 'At least AE (Air Engineer) must be assigned'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Assign personnel
+        if assigned_ae_id:
+            bfs.assigned_ae = User.objects.get(id=assigned_ae_id)
+        if assigned_al_id:
+            bfs.assigned_al = User.objects.get(id=assigned_al_id)
+        if assigned_ao_id:
+            bfs.assigned_ao = User.objects.get(id=assigned_ao_id)
+        if assigned_ar_id:
+            bfs.assigned_ar = User.objects.get(id=assigned_ar_id)
+        if assigned_se_id:
+            bfs.assigned_se = User.objects.get(id=assigned_se_id)
+        if assigned_supervisor_id:
+            bfs.assigned_supervisor = User.objects.get(id=assigned_supervisor_id)
+
+        bfs.supervisor_required = supervisor_required
+        bfs.personnel_added = True
+        bfs.status = 'IN_PROGRESS'
+        bfs.save()
+
+        serializer = self.get_serializer(bfs)
+        return Response(serializer.data)
+
     @action(detail=True, methods=['post'])
     def sign_tradesman(self, request, pk=None):
         """Sign BFS record as a tradesman (AE, AL, AO, AR, SE)"""
@@ -233,8 +303,16 @@ class BeforeFlyingServiceViewSet(viewsets.ModelViewSet):
         if not trade or not pin:
             return Response({'error': 'Trade and PIN are required'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Set the signature fields
+        if not bfs.personnel_added:
+            return Response({'error': 'Personnel must be assigned first'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Verify user is assigned to this trade
         trade_lower = trade.lower()
+        assigned_user = getattr(bfs, f'assigned_{trade_lower}')
+        if not assigned_user or assigned_user.id != request.user.id:
+            return Response({'error': f'You are not assigned as {trade.upper()}'}, status=status.HTTP_403_FORBIDDEN)
+
+        # Set the signature fields
         setattr(bfs, f'{trade_lower}_signature', request.user)
         setattr(bfs, f'{trade_lower}_pin', pin)
         setattr(bfs, f'{trade_lower}_signed_at', timezone.now())
@@ -252,6 +330,13 @@ class BeforeFlyingServiceViewSet(viewsets.ModelViewSet):
         if not pin:
             return Response({'error': 'PIN is required'}, status=status.HTTP_400_BAD_REQUEST)
 
+        if not bfs.supervisor_required:
+            return Response({'error': 'Supervisor signature not required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Verify user is assigned as supervisor
+        if not bfs.assigned_supervisor or bfs.assigned_supervisor.id != request.user.id:
+            return Response({'error': 'You are not assigned as supervisor'}, status=status.HTTP_403_FORBIDDEN)
+
         bfs.supervisor_signature = request.user
         bfs.supervisor_pin = pin
         bfs.supervisor_signed_at = timezone.now()
@@ -262,12 +347,15 @@ class BeforeFlyingServiceViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def sign_fsi(self, request, pk=None):
-        """Sign BFS record as FSI (Flight Safety Inspector)"""
+        """FSI final approval after reviewing all tradesman work"""
         bfs = self.get_object()
         pin = request.data.get('pin')
 
         if not pin:
             return Response({'error': 'PIN is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not bfs.fsi_initial_signed_at:
+            return Response({'error': 'FSI must complete initial authentication first'}, status=status.HTTP_400_BAD_REQUEST)
 
         bfs.fsi_signature = request.user
         bfs.fsi_pin = pin
@@ -351,18 +439,26 @@ class PostFlyingViewSet(viewsets.ModelViewSet):
         post_flying.engineer = request.user
         post_flying.engineer_pin = pin
         post_flying.engineer_signed_at = timezone.now()
-        post_flying.status = 'COMPLETED'
+
+        # Set status based on flight status
+        if post_flying.flight_status == 'TERMINATED':
+            post_flying.status = 'TERMINATED'
+        else:
+            post_flying.status = 'COMPLETED'
+
         post_flying.save()
 
-        # Update aircraft total flying hours
-        aircraft = post_flying.aircraft
-        aircraft.total_flying_hours += post_flying.flight_hours
-        aircraft.current_fuel_level = post_flying.fuel_level_after
-        if post_flying.tire_pressure_main_after:
-            aircraft.tire_pressure_main = post_flying.tire_pressure_main_after
-        if post_flying.tire_pressure_nose_after:
-            aircraft.tire_pressure_nose = post_flying.tire_pressure_nose_after
-        aircraft.save()
+        # Update aircraft data only if flight was completed (not terminated)
+        if post_flying.flight_status == 'COMPLETED' and post_flying.flight_hours:
+            aircraft = post_flying.aircraft
+            aircraft.total_flying_hours += post_flying.flight_hours
+            if post_flying.fuel_level_after:
+                aircraft.current_fuel_level = post_flying.fuel_level_after
+            if post_flying.tire_pressure_main_after:
+                aircraft.tire_pressure_main = post_flying.tire_pressure_main_after
+            if post_flying.tire_pressure_nose_after:
+                aircraft.tire_pressure_nose = post_flying.tire_pressure_nose_after
+            aircraft.save()
 
         serializer = self.get_serializer(post_flying)
         return Response(serializer.data)

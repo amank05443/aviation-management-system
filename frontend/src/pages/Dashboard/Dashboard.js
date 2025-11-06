@@ -62,19 +62,31 @@ const Dashboard = () => {
   };
 
   if (!selectedAircraft && !loading) {
-  return (
-    <div className="dashboard">
-      <h2 style={{ textAlign: 'center', padding: '3rem', color: 'var(--primary-violet)' }}>
-        No aircraft selected — showing general overview
-      </h2>
-    </div>
-  );
-}
+    return (
+      <div className="dashboard">
+        <div className="empty-state" style={{ minHeight: '60vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="empty-state-icon">
+            <FaPlane />
+          </div>
+          <h2 style={{ color: 'white', fontSize: '24px', fontWeight: '700', textShadow: '0 2px 10px rgba(0, 0, 0, 0.2)' }}>
+            No Aircraft Selected
+          </h2>
+          <p style={{ color: 'white', fontSize: '16px', marginTop: '10px', opacity: '0.9' }}>
+            Showing general overview
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   if (loading) {
     return (
       <div className="dashboard">
-        <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--primary-violet)' }}>
-          Loading dashboard...
+        <div className="empty-state" style={{ minHeight: '60vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ width: '60px', height: '60px', border: '4px solid rgba(255, 255, 255, 0.3)', borderTopColor: 'white', borderRadius: '50%', animation: 'spin 1s linear infinite', marginBottom: '20px' }}></div>
+          <p style={{ color: 'white', fontSize: '18px', fontWeight: '600', textShadow: '0 2px 10px rgba(0, 0, 0, 0.2)' }}>
+            Loading dashboard...
+          </p>
         </div>
       </div>
     );
@@ -287,17 +299,6 @@ const Dashboard = () => {
           </div>
         </div>
       </div>
-
-      {forecasts.length > 0 && (
-        <div className="chart-card">
-          <div className="section-header">
-            <h2>Flying Hours & Maintenance Forecast</h2>
-          </div>
-          <div style={{ height: '180px' }}>
-            <Line options={chartOptions} data={chartData} />
-          </div>
-        </div>
-      )}
     </div>
   );
 };

@@ -2,7 +2,16 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
-import { FaPlane, FaSun, FaMoon } from 'react-icons/fa';
+import {
+  PersonOutline,
+  LockOutlined,
+  LightMode,
+  DarkMode,
+  AccountCircle,
+  Badge,
+  Visibility,
+  VisibilityOff
+} from '@mui/icons-material';
 import './Login.css';
 
 const Login = () => {
@@ -14,13 +23,15 @@ const Login = () => {
   const [rank, setRank] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const { login, signup, token } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
 
   useEffect(() => {
     if (token) {
-          navigate('/dashboard');
+      navigate('/dashboard');
     }
   }, [token, navigate]);
 
@@ -29,7 +40,6 @@ const Login = () => {
     setError('');
 
     if (isSignup) {
-      // Signup validation
       if (!fullName || !pno || !rank || !password || !confirmPassword) {
         setError('Please fill in all required fields');
         return;
@@ -55,12 +65,11 @@ const Login = () => {
       setLoading(false);
 
       if (result.success) {
-            navigate('/dashboard');
+        navigate('/dashboard');
       } else {
         setError(result.error);
       }
     } else {
-      // Login validation
       if (!pno || !password) {
         setError('Please enter both PNO and password');
         return;
@@ -71,14 +80,14 @@ const Login = () => {
       setLoading(false);
 
       if (result.success) {
-            navigate('/dashboard');
+        navigate('/dashboard');
       } else {
         setError(result.error);
       }
     }
   };
 
-  const toggleMode = () => {
+  const handleTabSwitch = () => {
     setIsSignup(!isSignup);
     setError('');
     setPno('');
@@ -90,129 +99,181 @@ const Login = () => {
 
   return (
     <div className="login-container">
+      {/* Theme Toggle */}
       <button
         className="theme-toggle"
         onClick={toggleTheme}
         aria-label="Toggle theme"
-        type="button"
       >
-        {theme === 'light' ? <FaMoon /> : <FaSun />}
+        {theme === 'light' ? <DarkMode /> : <LightMode />}
       </button>
+
+      {/* Glass Login Card */}
       <div className="login-card">
-        <div className="login-header">
-          <div className="login-logo">
-            <FaPlane />
-          </div>
-          <h1 className="login-title">Aviation Management</h1>
-          <p className="login-subtitle">
-            {isSignup ? 'Create your account' : 'Sign in to access your dashboard'}
-          </p>
+        {/* Profile Avatar */}
+        <div className="login-avatar">
+          <AccountCircle />
         </div>
 
-        <form className="login-form" onSubmit={handleSubmit}>
-          {error && (
-            <div className="error-message">
-              <span>⚠</span>
-              {error}
-            </div>
-          )}
+        {/* Auth Tabs */}
+        <div className="auth-tabs">
+          <button
+            className={`auth-tab ${!isSignup ? 'active' : ''}`}
+            onClick={() => !isSignup || handleTabSwitch()}
+          >
+            Sign In
+          </button>
+          <button
+            className={`auth-tab ${isSignup ? 'active' : ''}`}
+            onClick={() => isSignup || handleTabSwitch()}
+          >
+            Sign Up
+          </button>
+        </div>
 
+        {/* Error Message */}
+        {error && <div className="error-message">{error}</div>}
+
+        {/* Form */}
+        <form onSubmit={handleSubmit}>
+          {/* Signup Fields */}
           {isSignup && (
-            <div className="form-group">
-              <label htmlFor="fullName" className="form-label">
-                Full Name *
-              </label>
-              <input
-                id="fullName"
-                type="text"
-                className="form-input"
-                placeholder="Enter your full name"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                autoFocus
-              />
+            <>
+              <div className="input-group">
+                <div className="input-wrapper">
+                  <AccountCircle className="input-icon" />
+                  <input
+                    type="text"
+                    placeholder="Full Name"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    required
+                    autoFocus
+                  />
+                </div>
+              </div>
+
+              <div className="input-group">
+                <div className="input-wrapper">
+                  <PersonOutline className="input-icon" />
+                  <input
+                    type="text"
+                    placeholder="Personnel Number (PNO)"
+                    value={pno}
+                    onChange={(e) => setPno(e.target.value)}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="input-group">
+                <div className="input-wrapper">
+                  <Badge className="input-icon" />
+                  <input
+                    type="text"
+                    placeholder="Rank"
+                    value={rank}
+                    onChange={(e) => setRank(e.target.value)}
+                    required
+                  />
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* Login Fields */}
+          {!isSignup && (
+            <div className="input-group">
+              <div className="input-wrapper">
+                <PersonOutline className="input-icon" />
+                <input
+                  type="text"
+                  placeholder="Username / PNO"
+                  value={pno}
+                  onChange={(e) => setPno(e.target.value)}
+                  required
+                  autoFocus
+                />
+              </div>
             </div>
           )}
 
-          <div className="form-group">
-            <label htmlFor="pno" className="form-label">
-              Personnel Number (PNO) *
-            </label>
-            <input
-              id="pno"
-              type="text"
-              className="form-input"
-              placeholder="Enter your PNO"
-              value={pno}
-              onChange={(e) => setPno(e.target.value)}
-              autoFocus={!isSignup}
-            />
+          {/* Password Field */}
+          <div className="input-group">
+            <div className="input-wrapper">
+              <LockOutlined className="input-icon" />
+              <input
+                type={showPassword ? 'text' : 'password'}
+                placeholder="Password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+              <button
+                type="button"
+                className="password-toggle"
+                onClick={() => setShowPassword(!showPassword)}
+              >
+                {showPassword ? <VisibilityOff /> : <Visibility />}
+              </button>
+            </div>
           </div>
 
+          {/* Confirm Password (Signup only) */}
           {isSignup && (
-            <div className="form-group">
-              <label htmlFor="rank" className="form-label">
-                Rank *
-              </label>
-              <input
-                id="rank"
-                type="text"
-                className="form-input"
-                placeholder="Enter your rank"
-                value={rank}
-                onChange={(e) => setRank(e.target.value)}
-              />
+            <div className="input-group">
+              <div className="input-wrapper">
+                <LockOutlined className="input-icon" />
+                <input
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  placeholder="Confirm Password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                />
+                <button
+                  type="button"
+                  className="password-toggle"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                >
+                  {showConfirmPassword ? <VisibilityOff /> : <Visibility />}
+                </button>
+              </div>
             </div>
           )}
 
-          <div className="form-group">
-            <label htmlFor="password" className="form-label">
-              Password *
-            </label>
-            <input
-              id="password"
-              type="password"
-              className="form-input"
-              placeholder={isSignup ? "Create a password (min 6 characters)" : "Enter your password"}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </div>
-
-          {isSignup && (
-            <div className="form-group">
-              <label htmlFor="confirmPassword" className="form-label">
-                Confirm Password *
+          {/* Remember Me & Forgot Password */}
+          {!isSignup && (
+            <div className="login-options">
+              <label className="remember-me">
+                <input type="checkbox" />
+                <span>Remember me</span>
               </label>
-              <input
-                id="confirmPassword"
-                type="password"
-                className="form-input"
-                placeholder="Confirm your password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-              />
+              <a href="#" className="forgot-password" onClick={(e) => e.preventDefault()}>
+                Forgot Password?
+              </a>
             </div>
           )}
 
+          {/* Submit Button */}
           <button
             type="submit"
             className="login-button"
             disabled={loading}
           >
-            {loading ? (isSignup ? 'Creating Account...' : 'Signing in...') : (isSignup ? 'Sign Up' : 'Sign In')}
+            {loading ? 'Loading...' : (isSignup ? 'Sign Up' : 'Login')}
           </button>
-
-          <div className="toggle-mode">
-            <span>{isSignup ? 'Already have an account?' : "Don't have an account?"}</span>
-            <button type="button" onClick={toggleMode} className="toggle-link">
-              {isSignup ? 'Sign In' : 'Sign Up'}
-            </button>
-          </div>
         </form>
 
-        <div className="login-footer">
-          Aviation Management System v1.0
+        {/* Create Account Link */}
+        <div className="create-account">
+          <button
+            type="button"
+            className="create-account-link"
+            onClick={handleTabSwitch}
+          >
+            {isSignup ? '← Back to Login' : 'Create Your Account →'}
+          </button>
         </div>
       </div>
     </div>

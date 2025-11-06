@@ -1,83 +1,139 @@
+/* Enhanced Contrast Sidebar Design */
+
 .sidebar {
   position: fixed;
   left: 0;
   top: 0;
   height: 100vh;
-  width: 260px;
-  background: var(--card-bg);
-  box-shadow: var(--shadow-lg);
+  width: 280px;
+  background: rgba(26, 15, 46, 0.98);
+  backdrop-filter: blur(25px);
+  box-shadow: 4px 0 24px 0 rgba(0, 0, 0, 0.4);
   overflow-y: auto;
-  z-index: 99;
+  z-index: 95;
   transition: transform 0.3s ease;
-  border-right: 1px solid var(--border-color);
+  border-right: 2px solid rgba(168, 85, 247, 0.25);
+}
+
+.sidebar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sidebar::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.sidebar::-webkit-scrollbar-thumb {
+  background: rgba(168, 85, 247, 0.5);
+  border-radius: 10px;
+}
+
+.sidebar::-webkit-scrollbar-thumb:hover {
+  background: rgba(168, 85, 247, 0.7);
 }
 
 .sidebar-content {
-  padding: 1.5rem 0;
+  padding: 2rem 0 1.5rem;
 }
 
 .sidebar-section {
-  margin-bottom: 1.5rem;
+  margin-bottom: 2rem;
 }
 
 .sidebar-section-title {
-  padding: 0.5rem 1.5rem;
-  font-size: 0.75rem;
-  font-weight: 700;
+  padding: 0.75rem 1.5rem;
+  font-size: 11px;
+  font-weight: 800;
   text-transform: uppercase;
-  color: var(--text-tertiary);
-  letter-spacing: 0.05em;
+  color: rgba(255, 255, 255, 0.6);
+  letter-spacing: 1.5px;
+  margin-bottom: 0.5rem;
 }
 
 .sidebar-nav {
   display: flex;
   flex-direction: column;
+  gap: 4px;
+  padding: 0 12px;
 }
 
 .sidebar-link {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.875rem 1.5rem;
-  color: var(--text-secondary);
+  gap: 12px;
+  padding: 14px 16px;
+  color: rgba(255, 255, 255, 0.8);
   text-decoration: none;
-  font-weight: 500;
-  transition: all 0.2s ease;
-  border-left: 3px solid transparent;
+  font-weight: 600;
+  font-size: 15px;
+  transition: all 0.3s ease;
+  border-radius: 12px;
   position: relative;
+  background: transparent;
+}
+
+.sidebar-link::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 0;
+  background: linear-gradient(180deg, #a855f7, #ec4899);
+  border-radius: 0 3px 3px 0;
+  transition: height 0.3s ease;
 }
 
 .sidebar-link:hover {
-  background: var(--hover-bg);
-  color: var(--primary-violet);
-  border-left-color: var(--primary-violet);
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 1);
+  transform: translateX(4px);
+}
+
+.sidebar-link:hover::before {
+  height: 60%;
 }
 
 .sidebar-link.active {
-  background: var(--bg-tertiary);
-  color: var(--primary-violet);
-  border-left-color: var(--primary-violet);
-  font-weight: 600;
+  background: rgba(168, 85, 247, 0.2);
+  color: rgba(255, 255, 255, 1);
+  font-weight: 700;
+  box-shadow: 0 4px 16px rgba(168, 85, 247, 0.25);
+}
+
+.sidebar-link.active::before {
+  height: 70%;
 }
 
 .sidebar-link-icon {
-  font-size: 1.125rem;
-  min-width: 20px;
+  font-size: 20px;
+  min-width: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  filter: drop-shadow(0 2px 6px rgba(168, 85, 247, 0.4));
 }
 
 .sidebar-link-text {
-  font-size: 0.875rem;
+  font-size: 15px;
+  letter-spacing: 0.3px;
 }
 
 .sidebar-divider {
   height: 1px;
-  background: var(--border-color);
-  margin: 1rem 0;
+  background: linear-gradient(90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.25) 50%,
+    transparent 100%
+  );
+  margin: 1.5rem 1.5rem;
 }
 
 /* Mobile styles */
 @media (max-width: 768px) {
   .sidebar {
+    width: 280px;
     transform: translateX(-100%);
   }
 
@@ -91,12 +147,70 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.5);
-    z-index: 98;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(4px);
+    z-index: 94;
     display: none;
   }
 
   .sidebar-overlay.open {
     display: block;
   }
+}
+
+@media (max-width: 480px) {
+  .sidebar {
+    width: 260px;
+  }
+
+  .sidebar-link {
+    padding: 12px 14px;
+    font-size: 14px;
+  }
+
+  .sidebar-link-icon {
+    font-size: 18px;
+  }
+}
+
+/* Light Mode Styles */
+[data-theme='light'] .sidebar {
+  background: rgba(248, 250, 252, 0.98);
+  border-right: 2px solid rgba(168, 85, 247, 0.15);
+  box-shadow: 4px 0 24px 0 rgba(0, 0, 0, 0.08);
+}
+
+[data-theme='light'] .sidebar-section-title {
+  color: rgba(100, 116, 139, 0.7);
+}
+
+[data-theme='light'] .sidebar-link {
+  color: rgba(51, 65, 85, 0.85);
+}
+
+[data-theme='light'] .sidebar-link:hover {
+  background: rgba(226, 232, 240, 0.5);
+  color: rgba(15, 23, 42, 1);
+}
+
+[data-theme='light'] .sidebar-link.active {
+  background: rgba(168, 85, 247, 0.12);
+  color: rgba(15, 23, 42, 1);
+  box-shadow: 0 4px 16px rgba(168, 85, 247, 0.15);
+}
+
+[data-theme='light'] .sidebar-divider {
+  background: linear-gradient(90deg,
+    transparent 0%,
+    rgba(100, 116, 139, 0.25) 50%,
+    transparent 100%
+  );
+}
+
+[data-theme='light'] .sidebar::-webkit-scrollbar-thumb {
+  background: rgba(168, 85, 247, 0.3);
+}
+
+[data-theme='light'] .sidebar::-webkit-scrollbar-thumb:hover {
+  background: rgba(168, 85, 247, 0.5);
 }

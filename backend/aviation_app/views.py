@@ -306,14 +306,18 @@ class BeforeFlyingServiceViewSet(viewsets.ModelViewSet):
         if not bfs.personnel_added:
             return Response({'error': 'Personnel must be assigned first'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Verify user is assigned to this trade
+        # Verify user is assigned to this trade and PIN is correct
         trade_lower = trade.lower()
         assigned_user = getattr(bfs, f'assigned_{trade_lower}')
-        if not assigned_user or assigned_user.id != request.user.id:
-            return Response({'error': f'You are not assigned as {trade.upper()}'}, status=status.HTTP_403_FORBIDDEN)
+        if not assigned_user:
+            return Response({'error': f'No user assigned as {trade.upper()}'}, status=status.HTTP_403_FORBIDDEN)
+
+        # Verify the PIN matches the assigned user's password
+        if not assigned_user.check_password(pin):
+            return Response({'error': 'Invalid PIN'}, status=status.HTTP_403_FORBIDDEN)
 
         # Set the signature fields
-        setattr(bfs, f'{trade_lower}_signature', request.user)
+        setattr(bfs, f'{trade_lower}_signature', assigned_user)
         setattr(bfs, f'{trade_lower}_pin', pin)
         setattr(bfs, f'{trade_lower}_signed_at', timezone.now())
         bfs.save()
@@ -333,11 +337,15 @@ class BeforeFlyingServiceViewSet(viewsets.ModelViewSet):
         if not bfs.supervisor_required:
             return Response({'error': 'Supervisor signature not required'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Verify user is assigned as supervisor
-        if not bfs.assigned_supervisor or bfs.assigned_supervisor.id != request.user.id:
-            return Response({'error': 'You are not assigned as supervisor'}, status=status.HTTP_403_FORBIDDEN)
+        # Verify supervisor is assigned and PIN is correct
+        if not bfs.assigned_supervisor:
+            return Response({'error': 'No supervisor assigned'}, status=status.HTTP_403_FORBIDDEN)
 
-        bfs.supervisor_signature = request.user
+        # Verify the PIN matches the assigned supervisor's password
+        if not bfs.assigned_supervisor.check_password(pin):
+            return Response({'error': 'Invalid PIN'}, status=status.HTTP_403_FORBIDDEN)
+
+        bfs.supervisor_signature = bfs.assigned_supervisor
         bfs.supervisor_pin = pin
         bfs.supervisor_signed_at = timezone.now()
         bfs.save()

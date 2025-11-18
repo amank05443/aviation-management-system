@@ -1,4 +1,5 @@
 import { NavLink } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import {
   FaGaugeHigh,
   FaPlane,
@@ -6,11 +7,13 @@ import {
   FaClipboardList,
   FaChartLine,
   FaTriangleExclamation,
-  FaCircleExclamation
+  FaCircleExclamation,
+  FaBars,
+  FaChevronLeft
 } from 'react-icons/fa6';
 import './Sidebar.css';
 
-const Sidebar = () => {
+const Sidebar = ({ collapsed, setCollapsed }) => {
   const navItems = [
     {
       section: 'Main',
@@ -38,30 +41,47 @@ const Sidebar = () => {
 
   return (
     <>
-      <div className="sidebar">
+      <motion.div
+        className={`sidebar ${collapsed ? 'collapsed' : ''}`}
+        animate={{ width: collapsed ? 70 : 280 }}
+        transition={{ duration: 0.3, ease: 'easeInOut' }}
+      >
+        {/* Toggle Button */}
+        <button
+          onClick={() => setCollapsed(!collapsed)}
+          className="sidebar-toggle"
+        >
+          {collapsed ? <FaBars /> : <FaChevronLeft />}
+        </button>
+
         <div className="sidebar-content">
           {navItems.map((section, index) => (
             <div key={index} className="sidebar-section">
-              <div className="sidebar-section-title">{section.section}</div>
+              {!collapsed && (
+                <div className="sidebar-section-title">{section.section}</div>
+              )}
               <nav className="sidebar-nav">
                 {section.items.map((item, itemIndex) => (
                   <NavLink
                     key={itemIndex}
                     to={item.path}
                     className={({ isActive }) =>
-                      `sidebar-link ${isActive ? 'active' : ''}`
+                      `sidebar-link ${isActive ? 'active' : ''} ${collapsed ? 'collapsed' : ''}`
                     }
+                    title={collapsed ? item.text : ''}
                   >
                     <span className="sidebar-link-icon">{item.icon}</span>
-                    <span className="sidebar-link-text">{item.text}</span>
+                    {!collapsed && (
+                      <span className="sidebar-link-text">{item.text}</span>
+                    )}
                   </NavLink>
                 ))}
               </nav>
-              {index < navItems.length - 1 && <div className="sidebar-divider" />}
+              {index < navItems.length - 1 && !collapsed && <div className="sidebar-divider" />}
             </div>
           ))}
         </div>
-      </div>
+      </motion.div>
     </>
   );
 };

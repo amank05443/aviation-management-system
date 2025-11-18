@@ -32,8 +32,57 @@
   background: rgba(168, 85, 247, 0.7);
 }
 
+.sidebar-toggle {
+  position: absolute;
+  top: 1rem;
+  right: 0.75rem;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: none;
+  background: rgba(168, 85, 247, 0.2);
+  color: rgba(255, 255, 255, 0.9);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  z-index: 10;
+}
+
+.sidebar-toggle:hover {
+  background: rgba(168, 85, 247, 0.4);
+  transform: scale(1.05);
+}
+
+.sidebar.collapsed .sidebar-toggle {
+  right: 50%;
+  transform: translateX(50%);
+}
+
+.sidebar.collapsed .sidebar-toggle:hover {
+  transform: translateX(50%) scale(1.05);
+}
+
 .sidebar-content {
-  padding: 2rem 0 1.5rem;
+  padding: 4rem 0 1.5rem;
+}
+
+.sidebar.collapsed .sidebar-content {
+  padding-top: 4rem;
+}
+
+.sidebar.collapsed .sidebar-nav {
+  padding: 0 8px;
+}
+
+.sidebar-link.collapsed {
+  justify-content: center;
+  padding: 14px 0;
+}
+
+.sidebar-link.collapsed .sidebar-link-icon {
+  margin: 0;
 }
 
 .sidebar-section {
@@ -213,4 +262,14 @@
 
 [data-theme='light'] .sidebar::-webkit-scrollbar-thumb:hover {
   background: rgba(168, 85, 247, 0.5);
+}
+
+[data-theme='light'] .sidebar-toggle {
+  background: rgba(168, 85, 247, 0.15);
+  color: rgba(100, 116, 139, 0.9);
+}
+
+[data-theme='light'] .sidebar-toggle:hover {
+  background: rgba(168, 85, 247, 0.3);
+  color: rgba(15, 23, 42, 1);
 }

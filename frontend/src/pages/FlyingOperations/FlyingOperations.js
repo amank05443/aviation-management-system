@@ -1,14 +1,14 @@
 import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
-  FaPlane, FaCheckCircle, FaUserShield, FaLock,
+  FaCheckCircle, FaUserShield, FaLock,
   FaChevronRight, FaTools, FaClipboardCheck, FaExclamationTriangle,
-  FaInfoCircle, FaUsers, FaSearch
+  FaInfoCircle, FaUsers, FaSearch, FaTimes
 } from 'react-icons/fa';
 import PilotAcceptance from './PilotAcceptance';
 import PostFlying from './PostFlying';
-import './FlyingOperations.css';
 
 const FlyingOperations = () => {
   const { selectedAircraft } = useAuth();
@@ -45,7 +45,6 @@ const FlyingOperations = () => {
 
   const FSI_PIN = '1234';
   const PILOT_PIN = '5678';
-  const ENGINEER_PIN = '7890';
 
   // Main stages
   const [currentStage, setCurrentStage] = useState(0);
@@ -57,8 +56,8 @@ const FlyingOperations = () => {
   const [fsiPin, setFsiPin] = useState('');
   const [fsiAuthenticated, setFsiAuthenticated] = useState(false);
   const [selectedTrades, setSelectedTrades] = useState([]);
-  const [assignedPersonnel, setAssignedPersonnel] = useState({});
-  const [supervisorPno, setSupervisorPno] = useState('');
+  // Changed to support multiple tradesmen per trade
+  const [assignedPersonnel, setAssignedPersonnel] = useState({}); // { AE: [person1, person2], AL: [person1] }
   const [searchPno, setSearchPno] = useState('');
   const [searchResults, setSearchResults] = useState(null);
   const [searchSuggestions, setSearchSuggestions] = useState([]);
@@ -77,14 +76,14 @@ const FlyingOperations = () => {
   const [pilotPin, setPilotPin] = useState('');
 
   // Post Flying - Enhanced Workflow
-  const [flightStatus, setFlightStatus] = useState(''); // 'completed', 'terminated', 'not_flown'
-  const [defectStatus, setDefectStatus] = useState(''); // 'with_defect', 'no_defect'
+  const [flightStatus, setFlightStatus] = useState('');
+  const [defectStatus, setDefectStatus] = useState('');
   const [flightData, setFlightData] = useState({ landings: '', airframeHours: '' });
   const [postPilotPin, setPostPilotPin] = useState('');
   const [pilotDataAuthenticated, setPilotDataAuthenticated] = useState(false);
 
-  // AFS (After Flying Servicing) Workflow
-  const [afsStage, setAfsStage] = useState(0); // 0: FSI assign, 1: Work completion, 2: Complete
+  // AFS Workflow
+  const [afsStage, setAfsStage] = useState(0);
   const [afsFsiPin, setAfsFsiPin] = useState('');
   const [afsFsiAuthenticated, setAfsFsiAuthenticated] = useState(false);
   const [afsSelectedTrades, setAfsSelectedTrades] = useState([]);
@@ -112,24 +111,22 @@ const FlyingOperations = () => {
       setAssignedPersonnel(newAssigned);
     } else {
       setSelectedTrades([...selectedTrades, trade]);
+      setAssignedPersonnel({ ...assignedPersonnel, [trade]: [] });
     }
   };
 
-  // Live search suggestions as user types
+  // Live search suggestions
   const handleSearchInput = (value) => {
     setSearchPno(value);
-
     if (value.trim().length < 2) {
       setSearchSuggestions([]);
       return;
     }
-
     const searchTerm = value.toLowerCase();
     const matches = Object.values(PERSONNEL_DATABASE).filter(p =>
       p.pno.toLowerCase().includes(searchTerm) ||
       p.name.toLowerCase().includes(searchTerm)
-    ).slice(0, 5); // Show max 5 suggestions
-
+    ).slice(0, 5);
     setSearchSuggestions(matches);
   };
 
@@ -141,20 +138,15 @@ const FlyingOperations = () => {
     showAlert('success', `Selected: ${person.name}`);
   };
 
-  // Search personnel by PNO or Name
+  // Search personnel
   const handleSearchPersonnel = () => {
     const searchTerm = searchPno.toLowerCase();
-
-    // First try to find by PNO
     let person = PERSONNEL_DATABASE[searchPno.toUpperCase()];
-
-    // If not found by PNO, search by name
     if (!person) {
       person = Object.values(PERSONNEL_DATABASE).find(p =>
         p.name.toLowerCase().includes(searchTerm)
       );
     }
-
     if (person) {
       setSearchResults(person);
       setSearchSuggestions([]);
@@ -165,16 +157,35 @@ const FlyingOperations = () => {
     }
   };
 
-  // Assign personnel to trade
+  // Assign personnel to trade (now supports multiple)
   const handleAssignToTrade = (trade) => {
     if (searchResults && searchResults.trade === trade) {
-      setAssignedPersonnel({ ...assignedPersonnel, [trade]: searchResults });
+      const currentAssigned = assignedPersonnel[trade] || [];
+      // Check if already assigned
+      if (currentAssigned.some(p => p.pno === searchResults.pno)) {
+        showAlert('error', `${searchResults.name} is already assigned to ${trade}`);
+        return;
+      }
+      setAssignedPersonnel({
+        ...assignedPersonnel,
+        [trade]: [...currentAssigned, searchResults]
+      });
       setSearchPno('');
       setSearchResults(null);
       showAlert('success', `${searchResults.name} assigned to ${trade}`);
     } else {
       showAlert('error', `This personnel is not ${trade} trade`);
     }
+  };
+
+  // Remove personnel from trade
+  const handleRemoveFromTrade = (trade, pno) => {
+    const currentAssigned = assignedPersonnel[trade] || [];
+    setAssignedPersonnel({
+      ...assignedPersonnel,
+      [trade]: currentAssigned.filter(p => p.pno !== pno)
+    });
+    showAlert('info', 'Personnel removed from assignment');
   };
 
   // FSI Authentication
@@ -185,129 +196,80 @@ const FlyingOperations = () => {
     }
     if (fsiPin === FSI_PIN) {
       setFsiAuthenticated(true);
-      showAlert('success', 'FSI authenticated successfully! You can now assign work.');
+      showAlert('success', 'FSI authenticated successfully!');
     } else {
-      showAlert('error', 'Invalid FSI PIN. Please check and try again.');
+      showAlert('error', 'Invalid FSI PIN');
     }
   };
 
   // Complete Assignment
   const handleCompleteAssignment = () => {
     if (selectedTrades.length === 0) {
-      showAlert('error', 'Error: No trades selected. Please select at least one trade (AE, AL, AR, or AO).');
+      showAlert('error', 'No trades selected');
       return;
     }
-
-    const unassignedTrades = selectedTrades.filter(trade => !assignedPersonnel[trade]);
+    const unassignedTrades = selectedTrades.filter(trade =>
+      !assignedPersonnel[trade] || assignedPersonnel[trade].length === 0
+    );
     if (unassignedTrades.length > 0) {
-      showAlert('error', `Error: ${unassignedTrades.join(', ')} not assigned. Please search and assign personnel to all selected trades.`);
+      showAlert('error', `${unassignedTrades.join(', ')} not assigned`);
       return;
     }
-
-    if (!supervisorPno.trim()) {
-      showAlert('error', 'Error: Supervisor not assigned. Please enter a valid supervisor PNO.');
-      return;
-    }
-
-    const supervisor = PERSONNEL_DATABASE[supervisorPno.toUpperCase()];
-    if (!supervisor) {
-      showAlert('error', `Error: Supervisor PNO "${supervisorPno}" not found in database. Please enter a valid supervisor PNO.`);
-      return;
-    }
-
-    if (supervisor.trade !== 'SUP') {
-      showAlert('error', `Error: ${supervisor.name} is not a supervisor. Please assign a personnel with SUP trade.`);
-      return;
-    }
-
     setFlyingOpsSubStep(1);
-    showAlert('success', `Success! Work assigned to ${selectedTrades.join(', ')} and Supervisor ${supervisor.name}. Tradesmen can now complete their work.`);
+    showAlert('success', 'Work assigned successfully!');
   };
 
-  // Tradesman Sign
-  const handleTradesmanSign = (trade) => {
-    const pin = tradesmenPins[trade];
-    const person = assignedPersonnel[trade];
-
+  // Tradesman Sign (updated for multiple tradesmen)
+  const handleTradesmanSign = (trade, pno) => {
+    const pin = tradesmenPins[`${trade}-${pno}`];
+    const person = (assignedPersonnel[trade] || []).find(p => p.pno === pno);
     if (!pin || !pin.trim()) {
-      showAlert('error', `Error: Please enter PIN for ${person.name} (${trade}).`);
+      showAlert('error', `Please enter PIN for ${person?.name}`);
       return;
     }
-
     if (person && person.pin === pin) {
-      setTradesmenSignatures({ ...tradesmenSignatures, [trade]: person });
-      showAlert('success', `Success! ${person.name} (${trade}) signed their work completion.`);
-      setTradesmenPins({ ...tradesmenPins, [trade]: '' });
+      setTradesmenSignatures({ ...tradesmenSignatures, [`${trade}-${pno}`]: person });
+      showAlert('success', `${person.name} signed their work`);
+      setTradesmenPins({ ...tradesmenPins, [`${trade}-${pno}`]: '' });
     } else {
-      showAlert('error', `Error: Invalid PIN for ${person.name}. Expected PIN: ${person.pin}`);
+      showAlert('error', `Invalid PIN for ${person?.name}`);
     }
   };
 
   // Check if all tradesmen signed
   const allTradesmenSigned = () => {
-    return selectedTrades.every(trade => tradesmenSignatures[trade]);
-  };
-
-  // Supervisor Sign
-  const handleSupervisorSign = () => {
-    const supervisor = PERSONNEL_DATABASE[supervisorPno.toUpperCase()];
-    const pin = tradesmenPins['supervisor'];
-
-    if (!pin || !pin.trim()) {
-      showAlert('error', `Error: Please enter supervisor PIN for ${supervisor.name}.`);
-      return;
-    }
-
-    if (supervisor && supervisor.pin === pin) {
-      setTradesmenSignatures({ ...tradesmenSignatures, supervisor });
-      showAlert('success', `Success! Supervisor ${supervisor.name} has signed and verified all work.`);
-      setTradesmenPins({ ...tradesmenPins, supervisor: '' });
-    } else {
-      showAlert('error', `Error: Invalid PIN for supervisor ${supervisor.name}. Expected PIN: ${supervisor.pin}`);
-    }
+    return selectedTrades.every(trade => {
+      const personnel = assignedPersonnel[trade] || [];
+      return personnel.every(person => tradesmenSignatures[`${trade}-${person.pno}`]);
+    });
   };
 
   // Move to FSI Review
   const handleMoveToReview = () => {
-    const unsignedTrades = selectedTrades.filter(trade => !tradesmenSignatures[trade]);
-
-    if (unsignedTrades.length > 0) {
-      showAlert('error', `Error: ${unsignedTrades.join(', ')} have not signed yet. All assigned tradesmen must sign before proceeding.`);
+    if (!allTradesmenSigned()) {
+      showAlert('error', 'All tradesmen must sign before proceeding');
       return;
     }
-
-    if (!tradesmenSignatures.supervisor) {
-      showAlert('error', 'Error: Supervisor has not signed yet. Supervisor signature is required before FSI review.');
-      return;
-    }
-
     if (selectedTrades.includes('AE') && !aeAuthenticated) {
-      showAlert('error', 'Error: AE must fill and authenticate all aircraft data before proceeding to FSI review.');
+      showAlert('error', 'AE must authenticate data');
       return;
     }
-
-    if (selectedTrades.includes('AE') && (!aeData.fuelQty || !aeData.tyrePressure || !aeData.oilFilled)) {
-      showAlert('error', 'Error: AE must fill all aircraft data fields (Fuel Quantity, Tyre Pressure, Oil Filled).');
-      return;
-    }
-
     setFlyingOpsSubStep(2);
-    showAlert('success', 'All work completed! Proceeding to FSI review.');
+    showAlert('success', 'Proceeding to FSI review');
   };
 
   // FSI Forward to Pilot
   const handleFSIForward = () => {
     if (!reviewPin.trim()) {
-      showAlert('error', 'Error: Please enter FSI PIN to forward the work to Pilot.');
+      showAlert('error', 'Please enter FSI PIN');
       return;
     }
-
     if (reviewPin === FSI_PIN) {
       setCurrentStage(1);
       setReviewPin('');
-      showAlert('success', 'Success! Flying Operations completed and forwarded to Pilot Acceptance.');
+      showAlert('success', 'Forwarded to Pilot Acceptance');
     } else {
-      showAlert('error', 'Error: Invalid FSI PIN. Please check and try again.');
+      showAlert('error', 'Invalid FSI PIN');
     }
   };
 
@@ -315,62 +277,47 @@ const FlyingOperations = () => {
   const handlePilotAccept = () => {
     if (pilotPin === PILOT_PIN) {
       setCurrentStage(2);
-      showAlert('success', 'Aircraft accepted! Proceeding to Post Flying.');
+      showAlert('success', 'Aircraft accepted!');
       setPilotPin('');
     } else {
       showAlert('error', 'Invalid Pilot PIN');
     }
   };
 
-  // Post Flying - Select Flight Status
+  // Post Flying handlers
   const handleFlightStatusSelect = (status) => {
     setFlightStatus(status);
     setDefectStatus('');
-    showAlert('info', `Flight status selected: ${status.replace('_', ' ').toUpperCase()}`);
   };
 
-  // Post Flying - Select Defect Status
   const handleDefectStatusSelect = (status) => {
     setDefectStatus(status);
-    showAlert('info', `Defect status selected: ${status.replace('_', ' ').toUpperCase()}`);
   };
 
-  // Post Flying - Pilot Data Authentication
   const handlePilotDataAuth = () => {
     if (!flightData.landings || !flightData.airframeHours) {
-      showAlert('error', 'Please fill all flight data fields (Number of Landings and Airframe Hours)');
+      showAlert('error', 'Please fill all flight data fields');
       return;
     }
-
-    if (!postPilotPin.trim()) {
-      showAlert('error', 'Please enter Pilot PIN to authenticate');
-      return;
-    }
-
     if (postPilotPin === PILOT_PIN) {
       setPilotDataAuthenticated(true);
-      showAlert('success', 'Flight data authenticated! Aircraft ready for AFS (After Flying Servicing)');
+      showAlert('success', 'Flight data authenticated!');
       setPostPilotPin('');
     } else {
       showAlert('error', 'Invalid Pilot PIN');
     }
   };
 
-  // AFS - FSI Authentication
+  // AFS handlers
   const handleAFSFsiAuth = () => {
-    if (!afsFsiPin.trim()) {
-      showAlert('error', 'Please enter FSI PIN');
-      return;
-    }
     if (afsFsiPin === FSI_PIN) {
       setAfsFsiAuthenticated(true);
-      showAlert('success', 'FSI authenticated! You can now assign AFS workforce.');
+      showAlert('success', 'FSI authenticated for AFS');
     } else {
       showAlert('error', 'Invalid FSI PIN');
     }
   };
 
-  // AFS - Toggle trade selection
   const toggleAfsTrade = (trade) => {
     if (afsSelectedTrades.includes(trade)) {
       setAfsSelectedTrades(afsSelectedTrades.filter(t => t !== trade));
@@ -382,173 +329,113 @@ const FlyingOperations = () => {
     }
   };
 
-  // AFS - Live search suggestions
   const handleAfsSearchInput = (value) => {
     setAfsSearchPno(value);
-
     if (value.trim().length < 2) {
       setAfsSearchSuggestions([]);
       return;
     }
-
     const searchTerm = value.toLowerCase();
     const matches = Object.values(PERSONNEL_DATABASE).filter(p =>
       p.pno.toLowerCase().includes(searchTerm) ||
       p.name.toLowerCase().includes(searchTerm)
     ).slice(0, 5);
-
     setAfsSearchSuggestions(matches);
   };
 
-  // AFS - Select from suggestions
   const handleAfsSelectSuggestion = (person) => {
     setAfsSearchPno(person.pno);
     setAfsSearchResults(person);
     setAfsSearchSuggestions([]);
-    showAlert('success', `Selected: ${person.name}`);
   };
 
-  // AFS - Search personnel
   const handleAfsSearchPersonnel = () => {
     const searchTerm = afsSearchPno.toLowerCase();
     let person = PERSONNEL_DATABASE[afsSearchPno.toUpperCase()];
-
     if (!person) {
       person = Object.values(PERSONNEL_DATABASE).find(p =>
         p.name.toLowerCase().includes(searchTerm)
       );
     }
-
     if (person) {
       setAfsSearchResults(person);
       setAfsSearchSuggestions([]);
-      showAlert('success', `Found: ${person.name}`);
     } else {
       setAfsSearchResults(null);
       showAlert('error', 'Personnel not found');
     }
   };
 
-  // AFS - Assign personnel to trade
   const handleAfsAssignToTrade = (trade) => {
     if (afsSearchResults && afsSearchResults.trade === trade) {
       setAfsAssignedPersonnel({ ...afsAssignedPersonnel, [trade]: afsSearchResults });
       setAfsSearchPno('');
       setAfsSearchResults(null);
-      showAlert('success', `${afsSearchResults.name} assigned to ${trade} for AFS`);
-    } else {
-      showAlert('error', `This personnel is not ${trade} trade`);
     }
   };
 
-  // AFS - Complete Assignment
   const handleAfsCompleteAssignment = () => {
     if (afsSelectedTrades.length === 0) {
-      showAlert('error', 'No trades selected for AFS');
+      showAlert('error', 'No trades selected');
       return;
     }
-
     const unassignedTrades = afsSelectedTrades.filter(trade => !afsAssignedPersonnel[trade]);
     if (unassignedTrades.length > 0) {
       showAlert('error', `${unassignedTrades.join(', ')} not assigned`);
       return;
     }
-
-    if (!afsSupervisorPno.trim()) {
-      showAlert('error', 'Supervisor not assigned');
-      return;
-    }
-
     const supervisor = PERSONNEL_DATABASE[afsSupervisorPno.toUpperCase()];
     if (!supervisor || supervisor.trade !== 'SUP') {
-      showAlert('error', 'Invalid supervisor PNO');
+      showAlert('error', 'Invalid supervisor');
       return;
     }
-
     setAfsStage(1);
-    showAlert('success', 'AFS work assigned! Tradesmen can now complete their work.');
   };
 
-  // AFS - Tradesman Sign
   const handleAfsTradesmanSign = (trade) => {
     const pin = afsTradesmenPins[trade];
     const person = afsAssignedPersonnel[trade];
-
-    if (!pin || !pin.trim()) {
-      showAlert('error', `Please enter PIN for ${person.name}`);
-      return;
-    }
-
     if (person && person.pin === pin) {
       setAfsTradesmenSignatures({ ...afsTradesmenSignatures, [trade]: person });
-      showAlert('success', `${person.name} signed AFS work completion`);
       setAfsTradesmenPins({ ...afsTradesmenPins, [trade]: '' });
     } else {
-      showAlert('error', `Invalid PIN for ${person.name}`);
+      showAlert('error', 'Invalid PIN');
     }
   };
 
-  // AFS - Supervisor Sign
   const handleAfsSupervisorSign = () => {
     const supervisor = PERSONNEL_DATABASE[afsSupervisorPno.toUpperCase()];
     const pin = afsTradesmenPins['supervisor'];
-
-    if (!pin || !pin.trim()) {
-      showAlert('error', `Please enter supervisor PIN`);
-      return;
-    }
-
     if (supervisor && supervisor.pin === pin) {
       setAfsTradesmenSignatures({ ...afsTradesmenSignatures, supervisor });
-      showAlert('success', `Supervisor ${supervisor.name} signed AFS completion`);
       setAfsTradesmenPins({ ...afsTradesmenPins, supervisor: '' });
-    } else {
-      showAlert('error', `Invalid PIN for supervisor`);
     }
   };
 
-  // AFS - Complete AFS
   const handleCompleteAfs = () => {
     const unsignedTrades = afsSelectedTrades.filter(trade => !afsTradesmenSignatures[trade]);
-
-    if (unsignedTrades.length > 0) {
-      showAlert('error', `${unsignedTrades.join(', ')} have not signed yet`);
+    if (unsignedTrades.length > 0 || !afsTradesmenSignatures.supervisor) {
+      showAlert('error', 'All signatures required');
       return;
     }
-
-    if (!afsTradesmenSignatures.supervisor) {
-      showAlert('error', 'Supervisor has not signed yet');
-      return;
-    }
-
     setAfsStage(2);
-    showAlert('success', 'AFS Completed! Flight operation cycle complete.');
   };
 
-  // AE Authentication (after filling data)
   const handleAeAuth = () => {
-    const aePerson = assignedPersonnel['AE'];
-
+    const aePerson = assignedPersonnel['AE']?.[0];
     if (!aeData.fuelQty || !aeData.tyrePressure || !aeData.oilFilled) {
-      showAlert('error', 'Error: Please fill all aircraft data fields (Fuel Quantity, Tyre Pressure, and Oil Filled) before authenticating.');
+      showAlert('error', 'Please fill all aircraft data fields');
       return;
     }
-
-    if (!aeAuthPin.trim()) {
-      showAlert('error', 'Error: Please enter AE PIN to confirm the data.');
-      return;
-    }
-
     if (aePerson && aePerson.pin === aeAuthPin) {
       setAeAuthenticated(true);
-      showAlert('success', `Success! ${aePerson.name} authenticated. Aircraft data confirmed and locked.`);
+      showAlert('success', 'Aircraft data confirmed');
       setAeAuthPin('');
     } else {
-      showAlert('error', `Error: Invalid PIN for ${aePerson.name}. Please check the PIN and try again.`);
+      showAlert('error', 'Invalid AE PIN');
     }
   };
 
-  // Reset
   const handleReset = () => {
     setCurrentStage(0);
     setFlyingOpsSubStep(0);
@@ -556,7 +443,6 @@ const FlyingOperations = () => {
     setFsiAuthenticated(false);
     setSelectedTrades([]);
     setAssignedPersonnel({});
-    setSupervisorPno('');
     setSearchPno('');
     setSearchResults(null);
     setTradesmenSignatures({});
@@ -582,7 +468,6 @@ const FlyingOperations = () => {
     setAfsSearchSuggestions([]);
     setAfsTradesmenSignatures({});
     setAfsTradesmenPins({});
-    showAlert('info', 'Starting new operation');
   };
 
   const mainStages = [
@@ -592,9 +477,9 @@ const FlyingOperations = () => {
   ];
 
   const flyingOpsSubSteps = [
-    { id: 0, title: 'Verify FSI & Assign Work' },
-    { id: 1, title: 'Work Done by Tradesmen' },
-    { id: 2, title: 'FSI Review & Forward' }
+    { id: 0, title: 'FSI Verify & Assign' },
+    { id: 1, title: 'Work Completion' },
+    { id: 2, title: 'FSI Review' }
   ];
 
   if (!selectedAircraft) {
@@ -603,389 +488,443 @@ const FlyingOperations = () => {
   }
 
   return (
-    <div className="flying-operations">
+    <div className="min-h-screen bg-gray-50 dark:bg-slate-900 p-4">
       {/* Alert */}
-      {alert.message && (
-        <div className={`alert ${alert.type}`}>
-          <div className="alert-icon">
+      <AnimatePresence>
+        {alert.message && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 text-sm
+              ${alert.type === 'success' ? 'bg-green-500 text-white' : ''}
+              ${alert.type === 'error' ? 'bg-red-500 text-white' : ''}
+              ${alert.type === 'info' ? 'bg-blue-500 text-white' : ''}`}
+          >
             {alert.type === 'success' && <FaCheckCircle />}
             {alert.type === 'error' && <FaExclamationTriangle />}
             {alert.type === 'info' && <FaInfoCircle />}
-          </div>
-          <p className="alert-message">{alert.message}</p>
-        </div>
-      )}
+            <span>{alert.message}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      {/* Main Progress */}
-      <div className="main-progress">
+      {/* Main Progress - Horizontal */}
+      <div className="flex justify-center gap-4 mb-5">
         {mainStages.map((stage, idx) => {
           const isCompleted = currentStage > stage.id;
           const isActive = currentStage === stage.id;
-          const isLocked = currentStage < stage.id;
-
           return (
-            <div key={stage.id} className="progress-item-wrapper">
-              <div className={`progress-item ${isActive ? 'active' : ''} ${isCompleted ? 'completed' : ''} ${isLocked ? 'locked' : ''}`}>
-                <div className="progress-icon">
-                  {isCompleted ? <FaCheckCircle /> : isLocked ? <FaLock /> : stage.icon}
-                </div>
-                <div className="progress-info">
-                  <h3>{stage.title}</h3>
-                  <p>{isCompleted ? 'Completed' : isActive ? 'Active' : 'Locked'}</p>
-                </div>
-              </div>
-              {idx < mainStages.length - 1 && <div className={`progress-connector ${currentStage > idx ? 'active' : ''}`}></div>}
+            <div key={stage.id} className="flex items-center">
+              <motion.div
+                whileHover={{ scale: 1.02 }}
+                className={`flex items-center gap-3 px-5 py-3 rounded-lg text-base font-medium transition-all
+                  ${isActive ? 'bg-violet-600 text-white shadow-lg shadow-violet-500/30' : ''}
+                  ${isCompleted ? 'bg-green-500 text-white' : ''}
+                  ${!isActive && !isCompleted ? 'bg-gray-200 dark:bg-slate-700 text-gray-500 dark:text-gray-400' : ''}`}
+              >
+                {isCompleted ? <FaCheckCircle /> : stage.icon}
+                <span>{stage.title}</span>
+              </motion.div>
+              {idx < mainStages.length - 1 && (
+                <FaChevronRight className={`mx-3 ${currentStage > idx ? 'text-green-500' : 'text-gray-300'}`} />
+              )}
             </div>
           );
         })}
       </div>
 
       {/* Content */}
-      <div className="ops-content">
+      <div className="flex gap-4 h-[calc(100vh-140px)]">
         {/* Flying Operations */}
         {currentStage === 0 && (
-          <div className="ops-section">
-            {/* Sub-steps Progress - Horizontal */}
-            <div className="sub-steps-breadcrumb">
-              {flyingOpsSubSteps.map((step, idx) => {
+          <>
+            {/* Vertical Sub-steps Sidebar */}
+            <div className="w-52 bg-white dark:bg-slate-800 rounded-lg shadow-md p-3 flex flex-col gap-3">
+              {flyingOpsSubSteps.map((step) => {
                 const isCompleted = flyingOpsSubStep > step.id;
                 const isActive = flyingOpsSubStep === step.id;
                 const isLocked = flyingOpsSubStep < step.id;
-
                 return (
-                  <div key={step.id} className="breadcrumb-wrapper">
-                    <div className={`breadcrumb-step ${isActive ? 'active' : ''} ${isCompleted ? 'completed' : ''} ${isLocked ? 'locked' : ''}`}>
-                      <div className="breadcrumb-number">
-                        {isCompleted ? <FaCheckCircle /> : isLocked ? <FaLock /> : step.id + 1}
-                      </div>
-                      <span className="breadcrumb-title">{step.title}</span>
+                  <div
+                    key={step.id}
+                    className={`flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium transition-all
+                      ${isActive ? 'bg-violet-600 text-white shadow-lg shadow-violet-500/30' : ''}
+                      ${isCompleted ? 'bg-green-500 text-white' : ''}
+                      ${isLocked ? 'bg-gray-100 dark:bg-slate-700 text-gray-400' : ''}`}
+                  >
+                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0
+                      ${isActive ? 'bg-white text-violet-600' : ''}
+                      ${isCompleted ? 'bg-white text-green-500' : ''}
+                      ${isLocked ? 'bg-gray-200 dark:bg-slate-600 text-gray-500' : ''}`}
+                    >
+                      {isCompleted ? <FaCheckCircle /> : isLocked ? <FaLock className="text-xs" /> : step.id + 1}
                     </div>
-                    {idx < flyingOpsSubSteps.length - 1 && (
-                      <FaChevronRight className={`breadcrumb-arrow ${isCompleted ? 'completed' : ''}`} />
-                    )}
+                    <span>{step.title}</span>
                   </div>
                 );
               })}
             </div>
 
-            {/* Main Content Area */}
-            <div className="ops-card">
-              {/* Sub-step 1: FSI & Assign */}
+            {/* Main Content */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="flex-1 bg-white dark:bg-slate-800 rounded-lg shadow-md p-5 overflow-y-auto"
+            >
+              {/* Sub-step 0: FSI & Assign */}
               {flyingOpsSubStep === 0 && (
-                <div className="ops-card-content">
-                  <h2><FaUserShield /> FSI Verification & Work Assignment</h2>
+                <div className="space-y-5">
+                  <h2 className="text-xl font-semibold flex items-center gap-3 text-violet-600 dark:text-violet-400">
+                    <FaUserShield /> FSI Verification & Work Assignment
+                  </h2>
 
                   {!fsiAuthenticated ? (
-                    <div className="auth-box">
-                      <p className="hint">FSI PIN: <strong>1234</strong></p>
-                      <div className="input-group">
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="bg-gray-50 dark:bg-slate-700 p-5 rounded-lg max-w-lg"
+                    >
+                      <p className="text-base text-gray-500 dark:text-gray-400 mb-4">FSI PIN: <strong>1234</strong></p>
+                      <div className="flex gap-3">
                         <input
                           type="password"
                           placeholder="Enter FSI PIN"
                           value={fsiPin}
                           onChange={(e) => setFsiPin(e.target.value)}
                           onKeyPress={(e) => e.key === 'Enter' && handleFSIAuth()}
+                          className="flex-1 px-4 py-2.5 text-base rounded-lg border border-gray-300 dark:border-slate-600 dark:bg-slate-800 focus:ring-2 focus:ring-violet-500 outline-none"
                         />
-                        <button onClick={handleFSIAuth} className="btn-primary">
+                        <button
+                          onClick={handleFSIAuth}
+                          className="px-5 py-2.5 bg-violet-600 text-white text-base rounded-lg hover:bg-violet-700 transition flex items-center gap-2"
+                        >
                           <FaCheckCircle /> Authenticate
                         </button>
                       </div>
-                    </div>
+                    </motion.div>
                   ) : (
-                    <div className="assignment-section">
+                    <div className="space-y-5">
                       {/* Trade Selection */}
-                      <div className="form-group">
-                        <label>Select Trades Required:</label>
-                        <div className="trade-grid">
+                      <div>
+                        <label className="text-base font-medium text-gray-700 dark:text-gray-300 mb-3 block">
+                          Select Trades Required:
+                        </label>
+                        <div className="grid grid-cols-4 gap-4">
                           {['AE', 'AL', 'AR', 'AO'].map(trade => (
-                            <div
+                            <motion.div
                               key={trade}
-                              className={`trade-card ${selectedTrades.includes(trade) ? 'selected' : ''}`}
+                              whileHover={{ scale: 1.02 }}
+                              whileTap={{ scale: 0.98 }}
                               onClick={() => toggleTrade(trade)}
+                              className={`p-4 rounded-lg cursor-pointer text-center transition-all
+                                ${selectedTrades.includes(trade)
+                                  ? 'bg-violet-100 dark:bg-violet-900/30 border-2 border-violet-500'
+                                  : 'bg-gray-100 dark:bg-slate-700 border-2 border-transparent hover:border-gray-300'}`}
                             >
-                              <div className="trade-name">{trade}</div>
-                              {assignedPersonnel[trade] && (
-                                <div className="assigned-info">
-                                  <FaCheckCircle /> {assignedPersonnel[trade].name}
+                              <div className="text-xl font-bold">{trade}</div>
+                              {assignedPersonnel[trade]?.length > 0 && (
+                                <div className="text-sm text-green-600 dark:text-green-400 mt-1 flex items-center justify-center gap-1">
+                                  <FaCheckCircle /> {assignedPersonnel[trade].length} assigned
                                 </div>
                               )}
-                            </div>
+                            </motion.div>
                           ))}
                         </div>
                       </div>
 
                       {/* Personnel Search */}
                       {selectedTrades.length > 0 && (
-                        <div className="form-group">
-                          <label>Search & Assign Personnel:</label>
-                          <div className="search-box-wrapper">
-                            <div className="search-box">
+                        <div>
+                          <label className="text-base font-medium text-gray-700 dark:text-gray-300 mb-3 block">
+                            Search & Assign Personnel (Multiple per Trade):
+                          </label>
+                          <div className="relative max-w-xl">
+                            <div className="flex gap-3">
                               <input
                                 type="text"
-                                placeholder="Enter PNO (e.g., AE001) or Name (e.g., Rajesh)"
+                                placeholder="Enter PNO (e.g., AE001) or Name"
                                 value={searchPno}
                                 onChange={(e) => handleSearchInput(e.target.value)}
                                 onKeyPress={(e) => e.key === 'Enter' && handleSearchPersonnel()}
+                                className="flex-1 px-4 py-2.5 text-base rounded-lg border border-gray-300 dark:border-slate-600 dark:bg-slate-800 focus:ring-2 focus:ring-violet-500 outline-none"
                               />
-                              <button onClick={handleSearchPersonnel} className="btn-secondary">
-                                <FaSearch /> Search
+                              <button
+                                onClick={handleSearchPersonnel}
+                                className="px-4 py-2.5 bg-gray-200 dark:bg-slate-600 text-base rounded-lg hover:bg-gray-300 dark:hover:bg-slate-500 transition"
+                              >
+                                <FaSearch />
                               </button>
                             </div>
 
-                            {/* Live Suggestions */}
-                            {searchSuggestions.length > 0 && (
-                              <div className="search-suggestions">
-                                {searchSuggestions.map((person) => (
-                                  <div
-                                    key={person.pno}
-                                    className="suggestion-item"
-                                    onClick={() => handleSelectSuggestion(person)}
-                                  >
-                                    <div className="suggestion-badge">{person.trade}</div>
-                                    <div className="suggestion-details">
-                                      <strong>{person.pno}</strong> - {person.name}
-                                      <span className="suggestion-rank">{person.rank}</span>
+                            {/* Suggestions */}
+                            <AnimatePresence>
+                              {searchSuggestions.length > 0 && (
+                                <motion.div
+                                  initial={{ opacity: 0, y: -5 }}
+                                  animate={{ opacity: 1, y: 0 }}
+                                  exit={{ opacity: 0, y: -5 }}
+                                  className="absolute z-10 w-full mt-1 bg-white dark:bg-slate-700 rounded-lg shadow-lg border border-gray-200 dark:border-slate-600 overflow-hidden"
+                                >
+                                  {searchSuggestions.map((person) => (
+                                    <div
+                                      key={person.pno}
+                                      onClick={() => handleSelectSuggestion(person)}
+                                      className="px-4 py-3 hover:bg-gray-100 dark:hover:bg-slate-600 cursor-pointer flex items-center gap-3 text-base"
+                                    >
+                                      <span className="px-2 py-1 bg-violet-100 dark:bg-violet-900 text-violet-700 dark:text-violet-300 rounded text-sm font-medium">
+                                        {person.trade}
+                                      </span>
+                                      <span className="font-medium">{person.pno}</span>
+                                      <span className="text-gray-500 dark:text-gray-400">{person.name}</span>
                                     </div>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
+                                  ))}
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
                           </div>
 
+                          {/* Search Result */}
                           {searchResults && (
-                            <div className="search-result">
-                              <div className="personnel-info">
-                                <p><strong>PNO:</strong> {searchResults.pno}</p>
-                                <p><strong>Name:</strong> {searchResults.name}</p>
-                                <p><strong>Rank:</strong> {searchResults.rank}</p>
-                                <p><strong>Trade:</strong> {searchResults.trade}</p>
+                            <motion.div
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              className="mt-4 p-4 bg-gray-50 dark:bg-slate-700 rounded-lg max-w-xl"
+                            >
+                              <div className="flex justify-between items-center">
+                                <div className="text-base">
+                                  <p className="font-medium">{searchResults.name} ({searchResults.pno})</p>
+                                  <p className="text-gray-500 dark:text-gray-400">{searchResults.rank} - {searchResults.trade}</p>
+                                </div>
+                                {selectedTrades.includes(searchResults.trade) && (
+                                  <button
+                                    onClick={() => handleAssignToTrade(searchResults.trade)}
+                                    className="px-4 py-2 bg-green-500 text-white text-base rounded-lg hover:bg-green-600 transition"
+                                  >
+                                    + Add to {searchResults.trade}
+                                  </button>
+                                )}
                               </div>
-                              {selectedTrades.includes(searchResults.trade) && !assignedPersonnel[searchResults.trade] && (
-                                <button
-                                  onClick={() => handleAssignToTrade(searchResults.trade)}
-                                  className="btn-success"
-                                >
-                                  Assign to {searchResults.trade}
-                                </button>
-                              )}
-                            </div>
+                            </motion.div>
                           )}
                         </div>
                       )}
 
-                      {/* Supervisor */}
-                      <div className="form-group">
-                        <label>Assign Supervisor (PNO):</label>
-                        <input
-                          type="text"
-                          className="supervisor-input"
-                          placeholder="Enter Supervisor PNO (e.g., SUP001)"
-                          value={supervisorPno}
-                          onChange={(e) => setSupervisorPno(e.target.value)}
-                        />
-                        {supervisorPno && PERSONNEL_DATABASE[supervisorPno.toUpperCase()] && (
-                          <p className="supervisor-info">
-                            <FaCheckCircle /> {PERSONNEL_DATABASE[supervisorPno.toUpperCase()].name} - {PERSONNEL_DATABASE[supervisorPno.toUpperCase()].rank}
-                          </p>
-                        )}
-                      </div>
+                      {/* Assigned Personnel Display */}
+                      {selectedTrades.length > 0 && (
+                        <div>
+                          <label className="text-base font-medium text-gray-700 dark:text-gray-300 mb-3 block">
+                            Assigned Personnel:
+                          </label>
+                          <div className="grid grid-cols-2 gap-4">
+                            {selectedTrades.map(trade => (
+                              <div key={trade} className="bg-gray-50 dark:bg-slate-700 p-4 rounded-lg">
+                                <div className="text-base font-medium text-violet-600 dark:text-violet-400 mb-3">
+                                  {trade} Trade:
+                                </div>
+                                {(assignedPersonnel[trade] || []).length === 0 ? (
+                                  <p className="text-sm text-gray-400 italic">No personnel assigned</p>
+                                ) : (
+                                  <div className="space-y-2">
+                                    {(assignedPersonnel[trade] || []).map(person => (
+                                      <div key={person.pno} className="flex items-center justify-between bg-white dark:bg-slate-600 px-3 py-2 rounded text-base">
+                                        <span>{person.name}</span>
+                                        <button
+                                          onClick={() => handleRemoveFromTrade(trade, person.pno)}
+                                          className="text-red-500 hover:text-red-700 p-1"
+                                        >
+                                          <FaTimes />
+                                        </button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
 
-                      <button onClick={handleCompleteAssignment} className="btn-primary btn-lg">
-                        <FaChevronRight /> Complete Assignment
+                      <button
+                        onClick={handleCompleteAssignment}
+                        className="px-6 py-3 bg-violet-600 text-white text-base font-medium rounded-lg hover:bg-violet-700 transition flex items-center gap-2"
+                      >
+                        Complete Assignment <FaChevronRight />
                       </button>
                     </div>
                   )}
                 </div>
               )}
 
-              {/* Sub-step 2: Tradesmen Work */}
+              {/* Sub-step 1: Tradesmen Work */}
               {flyingOpsSubStep === 1 && (
-                <div className="ops-card-content">
-                  <h2><FaUsers /> Tradesmen Work Completion</h2>
+                <div className="space-y-5">
+                  <h2 className="text-xl font-semibold flex items-center gap-3 text-violet-600 dark:text-violet-400">
+                    <FaUsers /> Tradesmen Work Completion
+                  </h2>
 
                   {/* AE Data Entry */}
                   {selectedTrades.includes('AE') && (
-                    <div className="ae-data-section">
-                      <h3>AE Data Entry</h3>
-
-                      {/* Data Entry Fields - Always visible */}
-                      <div className="data-grid">
-                        <div className="input-field">
-                          <label>Fuel Quantity (Liters): <span className="required-mark">*</span></label>
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-5 rounded-lg"
+                    >
+                      <h3 className="text-base font-medium text-amber-700 dark:text-amber-400 mb-4">AE Data Entry</h3>
+                      <div className="grid grid-cols-3 gap-4 mb-4">
+                        <div>
+                          <label className="text-sm text-gray-600 dark:text-gray-400 block mb-2">Fuel Quantity (L)</label>
                           <input
                             type="number"
                             value={aeData.fuelQty}
                             onChange={(e) => setAeData({ ...aeData, fuelQty: e.target.value })}
-                            placeholder="Enter fuel quantity"
                             disabled={aeAuthenticated}
+                            className="w-full px-4 py-2.5 text-base rounded-lg border border-gray-300 dark:border-slate-600 dark:bg-slate-800 disabled:bg-gray-100 dark:disabled:bg-slate-700"
                           />
                         </div>
-                        <div className="input-field">
-                          <label>Tyre Pressure (PSI): <span className="required-mark">*</span></label>
+                        <div>
+                          <label className="text-sm text-gray-600 dark:text-gray-400 block mb-2">Tyre Pressure (PSI)</label>
                           <input
                             type="number"
                             value={aeData.tyrePressure}
                             onChange={(e) => setAeData({ ...aeData, tyrePressure: e.target.value })}
-                            placeholder="Enter tyre pressure"
                             disabled={aeAuthenticated}
+                            className="w-full px-4 py-2.5 text-base rounded-lg border border-gray-300 dark:border-slate-600 dark:bg-slate-800 disabled:bg-gray-100 dark:disabled:bg-slate-700"
                           />
                         </div>
-                        <div className="input-field">
-                          <label>Oil Filled (Liters): <span className="required-mark">*</span></label>
+                        <div>
+                          <label className="text-sm text-gray-600 dark:text-gray-400 block mb-2">Oil Filled (L)</label>
                           <input
                             type="number"
                             value={aeData.oilFilled}
                             onChange={(e) => setAeData({ ...aeData, oilFilled: e.target.value })}
-                            placeholder="Enter oil filled"
                             disabled={aeAuthenticated}
+                            className="w-full px-4 py-2.5 text-base rounded-lg border border-gray-300 dark:border-slate-600 dark:bg-slate-800 disabled:bg-gray-100 dark:disabled:bg-slate-700"
                           />
                         </div>
                       </div>
-
-                      {/* Authentication Section - Shows after data is filled */}
                       {!aeAuthenticated ? (
-                        <div className="ae-auth-box">
-                          <p className="ae-auth-message">
-                            <FaUserShield /> AE ({assignedPersonnel['AE']?.name}) must authenticate to confirm the data
-                          </p>
-                          <p className="hint">
-                            AE PIN: <strong>{assignedPersonnel['AE']?.pin}</strong>
-                          </p>
-                          <div className="input-group">
-                            <input
-                              type="password"
-                              placeholder="Enter AE PIN to confirm data"
-                              value={aeAuthPin}
-                              onChange={(e) => setAeAuthPin(e.target.value)}
-                              onKeyPress={(e) => e.key === 'Enter' && handleAeAuth()}
-                            />
-                            <button onClick={handleAeAuth} className="btn-primary">
-                              <FaCheckCircle /> Confirm Data
-                            </button>
-                          </div>
+                        <div className="flex gap-3 items-center">
+                          <input
+                            type="password"
+                            placeholder={`AE PIN (${assignedPersonnel['AE']?.[0]?.pin})`}
+                            value={aeAuthPin}
+                            onChange={(e) => setAeAuthPin(e.target.value)}
+                            className="flex-1 px-4 py-2.5 text-base rounded-lg border border-amber-300 dark:border-amber-700 dark:bg-slate-800"
+                          />
+                          <button onClick={handleAeAuth} className="px-5 py-2.5 bg-amber-500 text-white text-base rounded-lg hover:bg-amber-600">
+                            Confirm Data
+                          </button>
                         </div>
                       ) : (
-                        <div className="ae-auth-success">
-                          <FaCheckCircle /> Data confirmed and locked by {assignedPersonnel['AE']?.name}
-                        </div>
+                        <p className="text-base text-green-600 dark:text-green-400 flex items-center gap-2">
+                          <FaCheckCircle /> Data confirmed by {assignedPersonnel['AE']?.[0]?.name}
+                        </p>
                       )}
-                    </div>
+                    </motion.div>
                   )}
 
-                  {/* Tradesmen Signatures */}
-                  <div className="signatures-grid">
-                    {selectedTrades.map(trade => {
-                      const person = assignedPersonnel[trade];
-                      const signed = tradesmenSignatures[trade];
-
-                      return (
-                        <div key={trade} className={`signature-card ${signed ? 'signed' : ''}`}>
-                          <div className="signature-header">
-                            <div className="person-info">
-                              <h4>{trade} - {person.name}</h4>
-                              <p>{person.rank} | {person.pno}</p>
+                  {/* Signatures Grid */}
+                  <div className="grid grid-cols-2 gap-4">
+                    {selectedTrades.map(trade => (
+                      (assignedPersonnel[trade] || []).map(person => {
+                        const signed = tradesmenSignatures[`${trade}-${person.pno}`];
+                        return (
+                          <motion.div
+                            key={`${trade}-${person.pno}`}
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            className={`p-4 rounded-lg border ${signed ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800' : 'bg-gray-50 dark:bg-slate-700 border-gray-200 dark:border-slate-600'}`}
+                          >
+                            <div className="flex justify-between items-start mb-3">
+                              <div>
+                                <p className="text-base font-medium">{trade} - {person.name}</p>
+                                <p className="text-sm text-gray-500 dark:text-gray-400">{person.rank}</p>
+                              </div>
+                              {signed && <FaCheckCircle className="text-green-500 text-lg" />}
                             </div>
-                            {signed && <FaCheckCircle className="signed-icon" />}
-                          </div>
-                          {!signed && (
-                            <div className="signature-input">
-                              <p className="hint">PIN: <strong>{person.pin}</strong></p>
-                              <input
-                                type="password"
-                                placeholder="Enter PIN"
-                                value={tradesmenPins[trade] || ''}
-                                onChange={(e) => setTradesmenPins({ ...tradesmenPins, [trade]: e.target.value })}
-                                onKeyPress={(e) => e.key === 'Enter' && handleTradesmanSign(trade)}
-                              />
-                              <button onClick={() => handleTradesmanSign(trade)} className="btn-primary">
-                                Sign
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-
-                    {/* Supervisor Signature */}
-                    {supervisorPno && PERSONNEL_DATABASE[supervisorPno.toUpperCase()] && (
-                      <div className={`signature-card ${tradesmenSignatures.supervisor ? 'signed' : ''}`}>
-                        <div className="signature-header">
-                          <div className="person-info">
-                            <h4>Supervisor - {PERSONNEL_DATABASE[supervisorPno.toUpperCase()].name}</h4>
-                            <p>{PERSONNEL_DATABASE[supervisorPno.toUpperCase()].rank} | {supervisorPno}</p>
-                          </div>
-                          {tradesmenSignatures.supervisor && <FaCheckCircle className="signed-icon" />}
-                        </div>
-                        {!tradesmenSignatures.supervisor && (
-                          <div className="signature-input">
-                            <p className="hint">PIN: <strong>{PERSONNEL_DATABASE[supervisorPno.toUpperCase()].pin}</strong></p>
-                            <input
-                              type="password"
-                              placeholder="Enter PIN"
-                              value={tradesmenPins.supervisor || ''}
-                              onChange={(e) => setTradesmenPins({ ...tradesmenPins, supervisor: e.target.value })}
-                              onKeyPress={(e) => e.key === 'Enter' && handleSupervisorSign()}
-                            />
-                            <button onClick={handleSupervisorSign} className="btn-primary">
-                              Sign
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    )}
+                            {!signed && (
+                              <div className="flex gap-3">
+                                <input
+                                  type="password"
+                                  placeholder={`PIN (${person.pin})`}
+                                  value={tradesmenPins[`${trade}-${person.pno}`] || ''}
+                                  onChange={(e) => setTradesmenPins({ ...tradesmenPins, [`${trade}-${person.pno}`]: e.target.value })}
+                                  className="flex-1 px-3 py-2 text-base rounded border border-gray-300 dark:border-slate-600 dark:bg-slate-800"
+                                />
+                                <button
+                                  onClick={() => handleTradesmanSign(trade, person.pno)}
+                                  className="px-4 py-2 bg-violet-600 text-white text-base rounded hover:bg-violet-700"
+                                >
+                                  Sign
+                                </button>
+                              </div>
+                            )}
+                          </motion.div>
+                        );
+                      })
+                    ))}
                   </div>
 
-                  <button onClick={handleMoveToReview} className="btn-primary btn-lg">
-                    <FaChevronRight /> Proceed to FSI Review
+                  <button
+                    onClick={handleMoveToReview}
+                    className="px-6 py-3 bg-violet-600 text-white text-base font-medium rounded-lg hover:bg-violet-700 transition flex items-center gap-2"
+                  >
+                    Proceed to Review <FaChevronRight />
                   </button>
                 </div>
               )}
 
-              {/* Sub-step 3: FSI Review */}
+              {/* Sub-step 2: FSI Review */}
               {flyingOpsSubStep === 2 && (
-                <div className="ops-card-content">
-                  <h2><FaCheckCircle /> FSI Review & Forward</h2>
+                <div className="space-y-5">
+                  <h2 className="text-xl font-semibold flex items-center gap-3 text-violet-600 dark:text-violet-400">
+                    <FaCheckCircle /> FSI Review & Forward
+                  </h2>
 
-                  <div className="review-section">
-                    <h3>Work Summary</h3>
-                    <div className="summary-grid">
+                  <div className="bg-gray-50 dark:bg-slate-700 p-5 rounded-lg">
+                    <h3 className="text-base font-medium mb-4">Work Summary</h3>
+                    <div className="grid grid-cols-2 gap-3 text-base">
                       {selectedTrades.map(trade => (
-                        <div key={trade} className="summary-item">
-                          <strong>{trade}:</strong> {assignedPersonnel[trade].name} <FaCheckCircle className="text-green" />
-                        </div>
+                        (assignedPersonnel[trade] || []).map(person => (
+                          <div key={`${trade}-${person.pno}`} className="flex items-center gap-2">
+                            <FaCheckCircle className="text-green-500" />
+                            <strong>{trade}:</strong> {person.name}
+                          </div>
+                        ))
                       ))}
-                      <div className="summary-item">
-                        <strong>Supervisor:</strong> {PERSONNEL_DATABASE[supervisorPno.toUpperCase()].name} <FaCheckCircle className="text-green" />
-                      </div>
                     </div>
 
                     {selectedTrades.includes('AE') && (
-                      <div className="ae-summary">
-                        <h4>Aircraft Data (AE)</h4>
-                        <p>Fuel: {aeData.fuelQty} L | Tyre Pressure: {aeData.tyrePressure} PSI | Oil: {aeData.oilFilled} L</p>
+                      <div className="mt-4 pt-4 border-t border-gray-200 dark:border-slate-600 text-base">
+                        <strong>AE Data:</strong> Fuel: {aeData.fuelQty}L | Tyre: {aeData.tyrePressure} PSI | Oil: {aeData.oilFilled}L
                       </div>
                     )}
                   </div>
 
-                  <div className="forward-section">
-                    <p className="hint">FSI PIN: <strong>1234</strong></p>
-                    <div className="input-group">
+                  <div className="max-w-lg">
+                    <p className="text-base text-gray-500 dark:text-gray-400 mb-3">FSI PIN: <strong>1234</strong></p>
+                    <div className="flex gap-3">
                       <input
                         type="password"
                         placeholder="Enter FSI PIN to forward"
                         value={reviewPin}
                         onChange={(e) => setReviewPin(e.target.value)}
                         onKeyPress={(e) => e.key === 'Enter' && handleFSIForward()}
+                        className="flex-1 px-4 py-2.5 text-base rounded-lg border border-gray-300 dark:border-slate-600 dark:bg-slate-800 focus:ring-2 focus:ring-green-500 outline-none"
                       />
-                      <button onClick={handleFSIForward} className="btn-success btn-lg">
-                        <FaChevronRight /> Forward to Pilot
+                      <button
+                        onClick={handleFSIForward}
+                        className="px-5 py-2.5 bg-green-500 text-white text-base rounded-lg hover:bg-green-600 transition flex items-center gap-2"
+                      >
+                        Forward to Pilot <FaChevronRight />
                       </button>
                     </div>
                   </div>
                 </div>
               )}
-            </div>
-          </div>
+            </motion.div>
+          </>
         )}
 
         {/* Pilot Acceptance */}
@@ -993,7 +932,6 @@ const FlyingOperations = () => {
           <PilotAcceptance
             selectedTrades={selectedTrades}
             assignedPersonnel={assignedPersonnel}
-            supervisorPno={supervisorPno}
             PERSONNEL_DATABASE={PERSONNEL_DATABASE}
             aeData={aeData}
             pilotPin={pilotPin}
@@ -1002,7 +940,6 @@ const FlyingOperations = () => {
             PILOT_PIN={PILOT_PIN}
           />
         )}
-
 
         {/* Post Flying */}
         {currentStage === 2 && (

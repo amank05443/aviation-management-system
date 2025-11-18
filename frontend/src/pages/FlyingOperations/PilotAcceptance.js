@@ -1,4 +1,5 @@
 import React from 'react';
+import { motion } from 'framer-motion';
 import {
   FaCheckCircle, FaUserShield, FaUsers, FaPlane
 } from 'react-icons/fa';
@@ -6,7 +7,6 @@ import {
 const PilotAcceptance = ({
   selectedTrades,
   assignedPersonnel,
-  supervisorPno,
   PERSONNEL_DATABASE,
   aeData,
   pilotPin,
@@ -15,94 +15,106 @@ const PilotAcceptance = ({
   PILOT_PIN
 }) => {
   return (
-    <div className="ops-section">
-      <div className="ops-card">
-        <div className="ops-card-content">
-          <h2><FaUserShield /> Pilot Acceptance</h2>
-          <p className="info-text">Review the work completed by FSI and accept the aircraft for flying operations.</p>
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      className="flex-1 bg-white dark:bg-slate-800 rounded-lg shadow-md p-5 overflow-y-auto"
+    >
+      <div className="space-y-5">
+        <h2 className="text-xl font-semibold flex items-center gap-3 text-violet-600 dark:text-violet-400">
+          <FaUserShield /> Pilot Acceptance
+        </h2>
+        <p className="text-base text-gray-500 dark:text-gray-400">
+          Review the completed work and accept the aircraft for flight.
+        </p>
 
-          {/* Work Summary for Pilot Review */}
-          <div className="pilot-review-section">
-            <h3><FaUsers /> Assigned Personnel & Signatures</h3>
-            <div className="review-personnel-grid">
-              {selectedTrades.map(trade => {
-                const person = assignedPersonnel[trade];
-                return (
-                  <div key={trade} className="review-personnel-card">
-                    <div className="review-badge">{trade}</div>
-                    <div className="review-info">
-                      <strong>{person.name}</strong>
-                      <p>{person.rank} | {person.pno}</p>
-                    </div>
-                    <div className="review-status">
-                      <FaCheckCircle className="text-green" /> Signed
-                    </div>
+        {/* Personnel Summary */}
+        <div className="bg-gray-50 dark:bg-slate-700 p-4 rounded-lg">
+          <h3 className="text-base font-medium flex items-center gap-2 mb-4">
+            <FaUsers className="text-violet-500" /> Assigned Personnel
+          </h3>
+          <div className="grid grid-cols-2 gap-3">
+            {selectedTrades.map(trade => (
+              (assignedPersonnel[trade] || []).map(person => (
+                <motion.div
+                  key={`${trade}-${person.pno}`}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  className="flex items-center justify-between bg-white dark:bg-slate-600 px-3 py-2 rounded text-base"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-1 bg-violet-100 dark:bg-violet-900 text-violet-700 dark:text-violet-300 rounded text-sm font-medium">
+                      {trade}
+                    </span>
+                    <span className="font-medium truncate">{person.name}</span>
                   </div>
-                );
-              })}
+                  <FaCheckCircle className="text-green-500" />
+                </motion.div>
+              ))
+            ))}
 
-              {/* Supervisor */}
-              {supervisorPno && PERSONNEL_DATABASE[supervisorPno.toUpperCase()] && (
-                <div className="review-personnel-card supervisor-card">
-                  <div className="review-badge supervisor-badge">SUP</div>
-                  <div className="review-info">
-                    <strong>{PERSONNEL_DATABASE[supervisorPno.toUpperCase()].name}</strong>
-                    <p>{PERSONNEL_DATABASE[supervisorPno.toUpperCase()].rank} | {supervisorPno}</p>
-                  </div>
-                  <div className="review-status">
-                    <FaCheckCircle className="text-green" /> Verified
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Aircraft Data Review (if AE was assigned) */}
-          {selectedTrades.includes('AE') && aeData.fuelQty && (
-            <div className="aircraft-data-review">
-              <h3><FaPlane /> Aircraft Data (Completed by AE)</h3>
-              <div className="data-review-grid">
-                <div className="data-review-item">
-                  <div className="data-label">Fuel Quantity</div>
-                  <div className="data-value">{aeData.fuelQty} <span className="data-unit">Liters</span></div>
-                </div>
-                <div className="data-review-item">
-                  <div className="data-label">Tyre Pressure</div>
-                  <div className="data-value">{aeData.tyrePressure} <span className="data-unit">PSI</span></div>
-                </div>
-                <div className="data-review-item">
-                  <div className="data-label">Oil Filled</div>
-                  <div className="data-value">{aeData.oilFilled} <span className="data-unit">Liters</span></div>
-                </div>
-              </div>
-              <div className="data-verified-by">
-                <FaCheckCircle className="text-green" /> Data verified and locked by {assignedPersonnel['AE'].name}
-              </div>
-            </div>
-          )}
-
-          {/* Pilot Acceptance */}
-          <div className="pilot-acceptance-box">
-            <p className="acceptance-message">
-              <FaCheckCircle /> All work has been completed and verified by FSI. Please review the above details and accept the aircraft.
-            </p>
-            <p className="hint">Pilot PIN: <strong>{PILOT_PIN}</strong></p>
-            <div className="input-group">
-              <input
-                type="password"
-                placeholder="Enter Pilot PIN to Accept Aircraft"
-                value={pilotPin}
-                onChange={(e) => setPilotPin(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handlePilotAccept()}
-              />
-              <button onClick={handlePilotAccept} className="btn-success btn-lg">
-                <FaCheckCircle /> Accept Aircraft
-              </button>
-            </div>
           </div>
         </div>
+
+        {/* Aircraft Data */}
+        {selectedTrades.includes('AE') && aeData.fuelQty && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-4 rounded-lg"
+          >
+            <h3 className="text-base font-medium flex items-center gap-2 mb-4 text-blue-700 dark:text-blue-400">
+              <FaPlane /> Aircraft Data (AE)
+            </h3>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="bg-white dark:bg-slate-700 p-3 rounded text-center">
+                <p className="text-sm text-gray-500 dark:text-gray-400">Fuel</p>
+                <p className="text-lg font-bold text-blue-600 dark:text-blue-400">{aeData.fuelQty} <span className="text-sm font-normal">L</span></p>
+              </div>
+              <div className="bg-white dark:bg-slate-700 p-3 rounded text-center">
+                <p className="text-sm text-gray-500 dark:text-gray-400">Tyre</p>
+                <p className="text-lg font-bold text-blue-600 dark:text-blue-400">{aeData.tyrePressure} <span className="text-sm font-normal">PSI</span></p>
+              </div>
+              <div className="bg-white dark:bg-slate-700 p-3 rounded text-center">
+                <p className="text-sm text-gray-500 dark:text-gray-400">Oil</p>
+                <p className="text-lg font-bold text-blue-600 dark:text-blue-400">{aeData.oilFilled} <span className="text-sm font-normal">L</span></p>
+              </div>
+            </div>
+            <p className="text-sm text-green-600 dark:text-green-400 mt-3 flex items-center gap-2">
+              <FaCheckCircle /> Verified by {assignedPersonnel['AE']?.[0]?.name}
+            </p>
+          </motion.div>
+        )}
+
+        {/* Accept Aircraft */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 p-4 rounded-lg"
+        >
+          <p className="text-base text-green-700 dark:text-green-400 mb-3 flex items-center gap-2">
+            <FaCheckCircle /> All work completed and verified by FSI
+          </p>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">Pilot PIN: <strong>{PILOT_PIN}</strong></p>
+          <div className="flex gap-3">
+            <input
+              type="password"
+              placeholder="Enter Pilot PIN"
+              value={pilotPin}
+              onChange={(e) => setPilotPin(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && handlePilotAccept()}
+              className="flex-1 px-4 py-2.5 text-base rounded border border-green-300 dark:border-green-700 dark:bg-slate-800 focus:ring-2 focus:ring-green-500 outline-none"
+            />
+            <button
+              onClick={handlePilotAccept}
+              className="px-5 py-2.5 bg-green-500 text-white text-base font-medium rounded hover:bg-green-600 transition flex items-center gap-2"
+            >
+              <FaCheckCircle /> Accept
+            </button>
+          </div>
+        </motion.div>
       </div>
-    </div>
+    </motion.div>
   );
 };
 

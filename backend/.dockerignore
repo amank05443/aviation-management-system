@@ -25,7 +25,6 @@ wheels/
 .gitignore
 .dockerignore
 Dockerfile
-docker-entrypoint.sh
 db.sqlite3
 *.sqlite3
 .DS_Store

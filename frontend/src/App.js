@@ -6,6 +6,7 @@ import AircraftSelection from './pages/AircraftSelection/AircraftSelection';
 import Dashboard from './pages/Dashboard/Dashboard';
 import FlyingOperations from './pages/FlyingOperations/FlyingOperations';
 import Maintenance from './pages/Maintenance/Maintenance';
+import ScheduleMaintenance from './pages/Maintenance/ScheduleMaintenance';
 import LeadingParticulars from './pages/LeadingParticulars/LeadingParticulars';
 import MaintenanceForecast from './pages/MaintenanceForecast/MaintenanceForecast';
 import Limitations from './pages/Limitations/Limitations';
@@ -37,6 +38,7 @@ function App() {
                 <Route path="dashboard" element={<Dashboard />} />
                 <Route path="flying-operations" element={<FlyingOperations />} />
                 <Route path="maintenance" element={<Maintenance />} />
+                <Route path="maintenance/schedule" element={<ScheduleMaintenance />} />
                 <Route path="leading-particulars" element={<LeadingParticulars />} />
                 <Route path="maintenance-forecast" element={<MaintenanceForecast />} />
                 <Route path="limitations" element={<Limitations />} />

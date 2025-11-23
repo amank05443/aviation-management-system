@@ -1,97 +1,148 @@
-import { useState, useEffect } from 'react';
+import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import axios from 'axios';
-import { FaWrench, FaPlus } from 'react-icons/fa6';
-import '../SharedStyles.css';
+import { FaCalendarAlt, FaTools, FaHistory, FaClipboardCheck } from 'react-icons/fa';
 
 const Maintenance = () => {
+  const navigate = useNavigate();
   const { selectedAircraft } = useAuth();
-  const [maintenanceSchedules, setMaintenanceSchedules] = useState([]);
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (selectedAircraft) {
-      fetchMaintenance();
-    }
-  }, [selectedAircraft]);
-
-  const fetchMaintenance = async () => {
-    try {
-      const response = await axios.get(`/api/maintenance-schedules/?aircraft_id=${selectedAircraft.id}`);
-      setMaintenanceSchedules(response.data);
-    } catch (error) {
-      console.error('Failed to fetch maintenance schedules:', error);
-    } finally {
-      setLoading(false);
-    }
+  const handleScheduleMaintenance = () => {
+    navigate('/maintenance/schedule');
   };
 
-  const getStatusBadge = (status) => {
-    const statusMap = {
-      'SCHEDULED': 'badge-info',
-      'IN_PROGRESS': 'badge-warning',
-      'COMPLETED': 'badge-success',
-      'CANCELLED': 'badge-error'
-    };
-    return statusMap[status] || 'badge-info';
-  };
+  const maintenanceOptions = [
+    {
+      id: 'schedule',
+      title: 'Schedule Maintenance',
+      description: 'Create and manage scheduled maintenance jobs with inspection checklists',
+      icon: FaCalendarAlt,
+      color: 'blue',
+      action: handleScheduleMaintenance,
+    },
+    {
+      id: 'history',
+      title: 'Maintenance History',
+      description: 'View past maintenance records and completed job cards',
+      icon: FaHistory,
+      color: 'green',
+      action: () => navigate('/maintenance/history'),
+    },
+    {
+      id: 'active',
+      title: 'Active Jobs',
+      description: 'Monitor ongoing maintenance work and job status',
+      icon: FaTools,
+      color: 'orange',
+      action: () => navigate('/maintenance/active'),
+    },
+    {
+      id: 'reports',
+      title: 'Reports & Analytics',
+      description: 'Generate maintenance reports and analyze aircraft health',
+      icon: FaClipboardCheck,
+      color: 'purple',
+      action: () => navigate('/maintenance/reports'),
+    },
+  ];
 
-  if (loading) {
-    return <div className="page-container"><div className="loading-state">Loading...</div></div>;
-  }
+  const colorClasses = {
+    blue: {
+      border: 'border-blue-600',
+      bg: 'bg-blue-50',
+      iconBg: 'bg-blue-600',
+      hoverBg: 'hover:bg-blue-100',
+      text: 'text-blue-600',
+    },
+    green: {
+      border: 'border-green-600',
+      bg: 'bg-green-50',
+      iconBg: 'bg-green-600',
+      hoverBg: 'hover:bg-green-100',
+      text: 'text-green-600',
+    },
+    orange: {
+      border: 'border-orange-600',
+      bg: 'bg-orange-50',
+      iconBg: 'bg-orange-600',
+      hoverBg: 'hover:bg-orange-100',
+      text: 'text-orange-600',
+    },
+    purple: {
+      border: 'border-purple-600',
+      bg: 'bg-purple-50',
+      iconBg: 'bg-purple-600',
+      hoverBg: 'hover:bg-purple-100',
+      text: 'text-purple-600',
+    },
+  };
 
   return (
-    <div className="page-container">
-      <div className="page-header">
-        <h1 className="page-title">
-          <FaWrench />
-          Maintenance Schedules
-        </h1>
-        <button className="primary-button">
-          <FaPlus />
-          Schedule Maintenance
-        </button>
+    <div className="min-h-screen bg-slate-50 px-6 py-4">
+      {/* Header */}
+      <div className="mb-6">
+        <h1 className="text-2xl font-semibold text-slate-900">Maintenance</h1>
+        <p className="text-sm text-slate-500 mt-1">
+          Manage aircraft maintenance schedules, inspections, and job cards
+        </p>
       </div>
 
-      <div className="page-content">
-        {maintenanceSchedules.length > 0 ? (
-          <div className="data-table">
-            <table>
-              <thead>
-                <tr>
-                  <th>Type</th>
-                  <th>Description</th>
-                  <th>Scheduled Date</th>
-                  <th>Technician</th>
-                  <th>Estimated Hours</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {maintenanceSchedules.map((maintenance) => (
-                  <tr key={maintenance.id}>
-                    <td>{maintenance.maintenance_type}</td>
-                    <td>{maintenance.description}</td>
-                    <td>{new Date(maintenance.scheduled_date).toLocaleDateString()}</td>
-                    <td>{maintenance.technician_name || 'Not assigned'}</td>
-                    <td>{maintenance.estimated_hours} hrs</td>
-                    <td>
-                      <span className={`badge ${getStatusBadge(maintenance.status)}`}>
-                        {maintenance.status.replace('_', ' ')}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      {/* Selected Aircraft Info */}
+      {selectedAircraft && (
+        <div className="mb-6 rounded-2xl border border-slate-200 bg-white px-5 py-3 shadow-sm">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-slate-600">Selected Aircraft:</span>
+            <span className="text-sm font-medium text-slate-900">
+              {selectedAircraft.registration || ''} {selectedAircraft.name || ''}
+            </span>
           </div>
-        ) : (
-          <div className="empty-state">
-            <FaWrench />
-            <h3>No Maintenance Schedules</h3>
-            <p>No maintenance schedules found for this aircraft</p>
-          </div>
-        )}
+        </div>
+      )}
+
+      {/* Maintenance Options Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {maintenanceOptions.map((option) => {
+          const colors = colorClasses[option.color];
+          const Icon = option.icon;
+
+          return (
+            <button
+              key={option.id}
+              onClick={option.action}
+              className={`rounded-2xl border-l-4 ${colors.border} bg-white p-5 shadow-sm transition-all ${colors.hoverBg} text-left`}
+            >
+              <div className="flex items-start gap-4">
+                <div className={`rounded-xl ${colors.iconBg} p-3 text-white`}>
+                  <Icon className="h-6 w-6" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold text-slate-900 mb-1">
+                    {option.title}
+                  </h3>
+                  <p className="text-sm text-slate-600">
+                    {option.description}
+                  </p>
+                </div>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Quick Stats (Optional) */}
+      <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="rounded-xl bg-white border border-slate-200 px-4 py-3 shadow-sm">
+          <div className="text-xs font-semibold text-slate-600 mb-1">Upcoming Maintenance</div>
+          <div className="text-2xl font-bold text-slate-900">3</div>
+        </div>
+        <div className="rounded-xl bg-white border border-slate-200 px-4 py-3 shadow-sm">
+          <div className="text-xs font-semibold text-slate-600 mb-1">Active Jobs</div>
+          <div className="text-2xl font-bold text-slate-900">1</div>
+        </div>
+        <div className="rounded-xl bg-white border border-slate-200 px-4 py-3 shadow-sm">
+          <div className="text-xs font-semibold text-slate-600 mb-1">Completed This Month</div>
+          <div className="text-2xl font-bold text-slate-900">7</div>
+        </div>
       </div>
     </div>
   );
